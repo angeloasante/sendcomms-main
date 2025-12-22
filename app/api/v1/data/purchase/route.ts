@@ -249,7 +249,45 @@ export async function POST(request: NextRequest) {
       // Log API usage
       await logUsage(customerId, apiKeyId, '/api/v1/data/purchase', 'POST');
 
-      // 8. Send webhook to customer
+      // 8. Log to data_logs table for dashboard tracking
+      try {
+        await supabase
+          .from('data_logs')
+          .insert({
+            customer_id: customerId,
+            transaction_id: transactionId,
+            reference: reference || null,
+            phone_number: normalizedPhone,
+            country_code: 'GH',
+            country_name: 'Ghana',
+            operator_id: datamartNetwork,
+            operator_name: network.toUpperCase(),
+            package_id: `${capacity_gb}gb`,
+            package_name: `${capacity_gb}GB Data Bundle`,
+            data_amount: `${capacity_gb}GB`,
+            validity: '30 days',
+            amount: ourPrice,
+            cost: providerPrice,
+            currency: 'GHS',
+            status: datamartResult.orderStatus === 'completed' ? 'successful' : 'processing',
+            metadata: metadata || {},
+            api_key_id: apiKeyId,
+            ip_address: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip'),
+            user_agent: request.headers.get('user-agent'),
+            provider_response: {
+              purchase_id: datamartResult.purchaseId,
+              transaction_reference: datamartResult.transactionReference,
+              order_reference: datamartResult.orderReference,
+              processing_method: datamartResult.processingMethod,
+              order_status: datamartResult.orderStatus
+            },
+            processed_at: new Date().toISOString()
+          });
+      } catch (logError) {
+        console.error('Failed to log data purchase:', logError);
+      }
+
+      // 9. Send webhook to customer
       await sendWebhooksForEvent(
         transactionId,
         customerId,
@@ -305,6 +343,40 @@ export async function POST(request: NextRequest) {
           processing_time_ms: processingTime
         })
         .eq('id', transactionId);
+
+      // Log failed purchase to data_logs
+      try {
+        await supabase
+          .from('data_logs')
+          .insert({
+            customer_id: customerId,
+            transaction_id: transactionId,
+            reference: reference || null,
+            phone_number: normalizedPhone,
+            country_code: 'GH',
+            country_name: 'Ghana',
+            operator_id: datamartNetwork,
+            operator_name: network.toUpperCase(),
+            package_id: `${capacity_gb}gb`,
+            package_name: `${capacity_gb}GB Data Bundle`,
+            data_amount: `${capacity_gb}GB`,
+            validity: '30 days',
+            amount: 0,
+            cost: 0,
+            currency: 'GHS',
+            status: 'failed',
+            metadata: metadata || {},
+            api_key_id: apiKeyId,
+            ip_address: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip'),
+            user_agent: request.headers.get('user-agent'),
+            provider_response: datamartData,
+            error_code: 'PURCHASE_FAILED',
+            error_message: datamartData.message || 'Purchase failed',
+            failed_at: new Date().toISOString()
+          });
+      } catch (logError) {
+        console.error('Failed to log failed data purchase:', logError);
+      }
 
       // Send failure webhook
       await sendWebhooksForEvent(
