@@ -38,9 +38,7 @@ export default function DocsLayout({
         <div className="flex items-center gap-8">
           <div className="flex items-center gap-3">
             <Link href="/" className="flex items-center gap-2">
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-500">
-                <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
-              </svg>
+              <img src="/logo.png" alt="SendComms" className="w-6 h-6 object-contain" />
               <span className="text-lg font-bold tracking-tight text-white">SendComms</span>
             </Link>
             <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-[#1c1e21] text-gray-400 border border-white/5">v1.0.0</span>

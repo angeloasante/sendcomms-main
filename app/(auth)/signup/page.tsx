@@ -294,6 +294,7 @@ export default function SignupPage() {
           {/* Logo */}
           <div className="relative z-10">
             <Link href="/" className="flex items-center gap-3">
+              <img src="/logo.png" alt="SendComms" className="w-10 h-10 object-contain" />
               <span className="text-lg font-medium tracking-tighter text-white">SENDCOMMS</span>
             </Link>
           </div>
@@ -337,7 +338,8 @@ export default function SignupPage() {
           
           {/* Mobile Logo (Visible only on small screens) */}
           <div className="absolute top-8 left-8 lg:hidden">
-            <Link href="/">
+            <Link href="/" className="flex items-center gap-2">
+              <img src="/logo.png" alt="SendComms" className="w-8 h-8 object-contain" />
               <span className="text-lg font-medium tracking-tighter text-white">SENDCOMMS</span>
             </Link>
           </div>

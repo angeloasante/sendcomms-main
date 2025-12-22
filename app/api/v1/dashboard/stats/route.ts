@@ -1,31 +1,49 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { createClient as createSupabaseClient, SupabaseClient } from '@supabase/supabase-js';
+import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/server';
 import { validateApiKey, errorResponse } from '@/lib/api-helpers';
 import { detectRegion, normalizeRegionForDisplay, AFRICAN_REGIONS } from '@/lib/region-detection';
 
-// Lazy-initialized Supabase client
-let supabase: SupabaseClient | null = null;
-
-function getSupabase(): SupabaseClient {
-  if (!supabase) {
-    supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_KEY!
-    );
-  }
-  return supabase;
-}
-
 export async function GET(request: NextRequest) {
   try {
-    // Validate API key
-    const keyData = await validateApiKey(request);
-    if (!keyData) {
-      return errorResponse('Invalid or missing API key', 401, 'UNAUTHORIZED');
+    let customerId: string | null = null;
+
+    // First try API key auth (for external API calls)
+    const authHeader = request.headers.get('authorization');
+    if (authHeader?.startsWith('Bearer ')) {
+      const keyData = await validateApiKey(request);
+      if (keyData) {
+        customerId = keyData.customer_id;
+      }
     }
 
-    const customerId = keyData.customer_id;
-    const supabaseClient = getSupabase();
+    // If no API key, try cookie-based auth (for dashboard)
+    if (!customerId) {
+      const supabase = await createClient();
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      
+      if (authError || !user) {
+        return errorResponse('Unauthorized', 401, 'UNAUTHORIZED');
+      }
+
+      // Get customer ID from auth user
+      const adminClient = createAdminClient();
+      const { data: customer, error: customerError } = await adminClient
+        .from('customers')
+        .select('id')
+        .eq('auth_user_id', user.id)
+        .single();
+
+      if (customerError || !customer) {
+        return errorResponse('Customer not found', 404, 'NOT_FOUND');
+      }
+      
+      customerId = customer.id;
+    }
+
+    // Use admin client for all queries
+    const supabaseClient = createAdminClient();
 
     // Get today's date range
     const today = new Date();

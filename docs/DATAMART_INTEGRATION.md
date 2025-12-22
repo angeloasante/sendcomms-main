@@ -10,7 +10,7 @@
 All requests must include the API key in the header:
 
 ```bash
-X-API-Key: 16b526a298456e25e191dd625929cf3430615ae707439094c052e5ae10277d63
+X-API-Key: YOUR_DATAMART_API_KEY
 ```
 
 ---
@@ -434,7 +434,7 @@ async function handleDatamartPurchase(phoneNumber, network, capacity, customerId
 ## Environment Variables
 
 ```env
-DATAMART_API_KEY=16b526a298456e25e191dd625929cf3430615ae707439094c052e5ae10277d63
+DATAMART_API_KEY=your_datamart_api_key_here
 DATAMART_API_URL=https://api.datamartgh.shop/api/developer
 ```
 

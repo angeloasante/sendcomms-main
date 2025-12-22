@@ -47,7 +47,7 @@
   - Balance: $100
   - Plan: enterprise
 - [x] **DONE**: Created first API key ✅
-  - Key: `ac_live_8be6e26c12a5584f090116b9c52c3814c376c4318125e668`
+  - Key: `sc_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
 - [x] **DONE**: Tested email API ✅
   - Test email sent to angeloasante958@gmail.com
   - Response: `{"success":true,"data":{"id":"email_mjgaw0tn_6bb5f9e6c11e"...}}`

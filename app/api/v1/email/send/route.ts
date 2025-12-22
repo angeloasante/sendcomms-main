@@ -260,6 +260,46 @@ export async function POST(request: NextRequest) {
       })
       .eq('id', transactionId);
 
+    // 11b. Log to email_logs table for dashboard tracking
+    const fromEmail = from || 'SendComms <noreply@sendcomms.com>';
+    const fromParts = fromEmail.match(/^(.+?)\s*<(.+?)>$/) || [null, null, fromEmail];
+    
+    // Log each recipient as a separate email entry
+    for (const recipient of recipients) {
+      try {
+        await getSupabase()
+          .from('email_logs')
+          .insert({
+            customer_id: keyData.customer_id,
+            message_id: result.id,
+            from_email: fromParts[2] || fromEmail,
+            from_name: fromParts[1] || null,
+            to_email: recipient,
+            reply_to: replyTo,
+            subject,
+            html_content: html,
+            text_content: text,
+            attachments: attachments ? attachments.map((a: { filename?: string }) => ({ filename: a.filename })) : [],
+            status: result.success ? 'sent' : 'failed',
+            tags: tags || [],
+            metadata: {
+              transaction_id: transactionId,
+              cc,
+              bcc,
+              headers
+            },
+            api_key_id: keyData.id,
+            ip_address: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip'),
+            user_agent: request.headers.get('user-agent'),
+            error_code: result.success ? null : 'SEND_FAILED',
+            error_message: result.error || null,
+            sent_at: result.success ? now : null
+          });
+      } catch (err) {
+        console.error('Failed to log email:', err);
+      }
+    }
+
     // 12. Deduct balance if successful
     if (result.success) {
       await deductBalance(keyData.customer_id, price);

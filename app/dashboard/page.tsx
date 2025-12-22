@@ -66,23 +66,8 @@ export default function DashboardPage() {
 
   const fetchStats = async () => {
     try {
-      // Get API key from localStorage or session
-      const apiKey = localStorage.getItem('sendcomms_api_key');
-      
-      if (!apiKey) {
-        // Show demo data if no API key
-        setStats(getDemoStats());
-        setLastUpdated('Demo mode');
-        setLoading(false);
-        return;
-      }
-
-      const response = await fetch('/api/v1/dashboard/stats', {
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      // Use cookie-based auth (no API key needed for dashboard)
+      const response = await fetch('/api/v1/dashboard/stats');
 
       if (!response.ok) {
         throw new Error('Failed to fetch stats');

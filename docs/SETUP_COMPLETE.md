@@ -53,7 +53,7 @@
 
 ### Your API Key
 ```
-ac_live_8be6e26c12a5584f090116b9c52c3814c376c4318125e668
+sc_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 > ⚠️ Keep this secure! Don't share publicly.
 
@@ -167,7 +167,7 @@ RELOADLY_CLIENT_SECRET=your_client_secret
 ### Using cURL
 ```bash
 curl -X POST https://your-domain.com/api/v1/email/send \
-  -H "Authorization: Bearer ac_live_8be6e26c12a5584f090116b9c52c3814c376c4318125e668" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "to": "recipient@example.com",
@@ -182,7 +182,7 @@ curl -X POST https://your-domain.com/api/v1/email/send \
 const response = await fetch('https://your-domain.com/api/v1/email/send', {
   method: 'POST',
   headers: {
-    'Authorization': 'Bearer ac_live_8be6e26c12a5584f090116b9c52c3814c376c4318125e668',
+    'Authorization': 'Bearer YOUR_API_KEY',
     'Content-Type': 'application/json'
   },
   body: JSON.stringify({
@@ -204,7 +204,7 @@ import requests
 response = requests.post(
     'https://your-domain.com/api/v1/email/send',
     headers={
-        'Authorization': 'Bearer ac_live_8be6e26c12a5584f090116b9c52c3814c376c4318125e668',
+        'Authorization': 'Bearer YOUR_API_KEY',
         'Content-Type': 'application/json'
     },
     json={
@@ -228,7 +228,7 @@ curl_setopt_array($curl, [
     CURLOPT_RETURNTRANSFER => true,
     CURLOPT_POST => true,
     CURLOPT_HTTPHEADER => [
-        'Authorization: Bearer ac_live_8be6e26c12a5584f090116b9c52c3814c376c4318125e668',
+        'Authorization: Bearer YOUR_API_KEY',
         'Content-Type: application/json'
     ],
     CURLOPT_POSTFIELDS => json_encode([
@@ -255,7 +255,7 @@ Send up to 100 emails in a single API call.
 ### Using cURL
 ```bash
 curl -X POST https://your-domain.com/api/v1/email/batch \
-  -H "Authorization: Bearer ac_live_8be6e26c12a5584f090116b9c52c3814c376c4318125e668" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "emails": [
@@ -278,7 +278,7 @@ curl -X POST https://your-domain.com/api/v1/email/batch \
 const response = await fetch('https://your-domain.com/api/v1/email/batch', {
   method: 'POST',
   headers: {
-    'Authorization': 'Bearer ac_live_8be6e26c12a5584f090116b9c52c3814c376c4318125e668',
+    'Authorization': 'Bearer YOUR_API_KEY',
     'Content-Type': 'application/json'
   },
   body: JSON.stringify({
@@ -308,7 +308,7 @@ import requests
 response = requests.post(
     'https://your-domain.com/api/v1/email/batch',
     headers={
-        'Authorization': 'Bearer ac_live_8be6e26c12a5584f090116b9c52c3814c376c4318125e668',
+        'Authorization': 'Bearer YOUR_API_KEY',
         'Content-Type': 'application/json'
     },
     json={
@@ -340,7 +340,7 @@ curl_setopt_array($curl, [
     CURLOPT_RETURNTRANSFER => true,
     CURLOPT_POST => true,
     CURLOPT_HTTPHEADER => [
-        'Authorization: Bearer ac_live_8be6e26c12a5584f090116b9c52c3814c376c4318125e668',
+        'Authorization: Bearer YOUR_API_KEY',
         'Content-Type: application/json'
     ],
     CURLOPT_POSTFIELDS => json_encode([
@@ -450,7 +450,7 @@ print('Webhook secret:', result['data']['secret'])
     "id": "e406c83c-50bc-4783-b5fc-4beafe6bf5eb",
     "url": "https://your-server.com/webhooks/sendcomms",
     "events": ["email.sent", "email.delivered", "email.bounced", "email.opened"],
-    "secret": "whsec_21be983f359112f9e07658ed2bddcee3062699a6ab70b092",
+    "secret": "whsec_your_webhook_secret_here",
     "active": true,
     "created_at": "2025-12-21T23:25:12.006Z"
   }
@@ -814,7 +814,7 @@ All docs pages include interactive code examples in:
     "id": "e406c83c-50bc-4783-b5fc-4beafe6bf5eb",
     "url": "https://your-server.com/webhooks",
     "events": ["email.sent", "email.delivered", "email.bounced"],
-    "secret": "whsec_21be983f359112f9e07658ed2bddcee3062699a6ab70b092",
+    "secret": "whsec_your_webhook_secret_here",
     "active": true,
     "created_at": "2025-12-21T23:25:12.006Z"
   }
