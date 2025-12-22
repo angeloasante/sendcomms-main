@@ -50,7 +50,7 @@ SendComms is a B2B API platform that enables developers and businesses to integr
 ### 2. Make Your First API Call
 
 ```bash
-curl -X POST https://api.sendcomms.com/v1/email/send \
+curl -X POST https://api.sendcomms.com/api/v1/email/send \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -70,7 +70,7 @@ Send transactional and marketing emails with high deliverability.
 
 ```javascript
 // Using fetch
-const response = await fetch('https://api.sendcomms.com/v1/email/send', {
+const response = await fetch('https://api.sendcomms.com/api/v1/email/send', {
   method: 'POST',
   headers: {
     'Authorization': 'Bearer YOUR_API_KEY',
@@ -93,7 +93,7 @@ console.log(data);
 import requests
 
 response = requests.post(
-    'https://api.sendcomms.com/v1/email/send',
+    'https://api.sendcomms.com/api/v1/email/send',
     headers={
         'Authorization': 'Bearer YOUR_API_KEY',
         'Content-Type': 'application/json'
@@ -111,7 +111,7 @@ print(response.json())
 ### Send Batch Emails
 
 ```bash
-curl -X POST https://api.sendcomms.com/v1/email/batch \
+curl -X POST https://api.sendcomms.com/api/v1/email/batch \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -141,7 +141,7 @@ Purchase mobile data bundles for customers across Africa.
 ### Purchase Data Bundle
 
 ```bash
-curl -X POST https://api.sendcomms.com/v1/data/purchase \
+curl -X POST https://api.sendcomms.com/api/v1/data/purchase \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -155,14 +155,14 @@ curl -X POST https://api.sendcomms.com/v1/data/purchase \
 ### Get Available Operators
 
 ```bash
-curl https://api.sendcomms.com/v1/data/operators \
+curl https://api.sendcomms.com/api/v1/data/operators \
   -H "Authorization: Bearer YOUR_API_KEY"
 ```
 
 ### Get Data Packages
 
 ```bash
-curl https://api.sendcomms.com/v1/data/packages?operator=mtn_gh \
+curl https://api.sendcomms.com/api/v1/data/packages?operator=mtn_gh \
   -H "Authorization: Bearer YOUR_API_KEY"
 ```
 
@@ -242,7 +242,7 @@ Receive real-time updates for your transactions.
 ### Register a Webhook
 
 ```bash
-curl -X POST https://api.sendcomms.com/v1/webhooks \
+curl -X POST https://api.sendcomms.com/api/v1/webhooks \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
