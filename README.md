@@ -11,8 +11,9 @@
 <p align="center">
   <img src="https://img.shields.io/badge/status-active-success" alt="Status" />
   <img src="https://img.shields.io/badge/Email%20API-✓%20Live-brightgreen" alt="Email API" />
+  <img src="https://img.shields.io/badge/SMS%20API-✓%20Live-brightgreen" alt="SMS API" />
   <img src="https://img.shields.io/badge/Data%20API-✓%20Live-brightgreen" alt="Data API" />
-  <img src="https://img.shields.io/badge/SMS%20API-Coming%20Soon-yellow" alt="SMS API" />
+  <img src="https://img.shields.io/badge/Sandbox%20Mode-✓%20Available-blue" alt="Sandbox Mode" />
   <img src="https://img.shields.io/badge/Airtime%20API-Coming%20Soon-yellow" alt="Airtime API" />
 </p>
 
@@ -168,6 +169,74 @@ curl https://api.sendcomms.com/api/v1/data/packages?operator=mtn_gh \
 
 ---
 
+## 📱 SMS API
+
+Send SMS messages to 180+ countries with intelligent provider routing.
+
+### Send SMS
+
+```bash
+curl -X POST https://api.sendcomms.com/api/v1/sms/send \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "to": "+233540800994",
+    "message": "Hello from SendComms!",
+    "sender_id": "SendComms"
+  }'
+```
+
+### Send SMS (JavaScript)
+
+```javascript
+const response = await fetch('https://api.sendcomms.com/api/v1/sms/send', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer YOUR_API_KEY',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    to: '+233540800994',
+    message: 'Your OTP is 123456',
+    sender_id: 'MyApp'
+  })
+});
+
+const data = await response.json();
+console.log(data);
+```
+
+### Get SMS Logs
+
+```bash
+curl "https://api.sendcomms.com/api/v1/sms/logs?limit=50&status=delivered" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+### Get SMS Stats
+
+```bash
+curl https://api.sendcomms.com/api/v1/sms/stats \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+### Get SMS Pricing
+
+```bash
+curl "https://api.sendcomms.com/api/v1/sms/pricing?country=GH" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+### SMS Features
+
+- **Multi-Provider Routing**: Automatic routing through Twilio or Termii based on destination
+- **180+ Countries**: Global coverage with optimized African routes
+- **Delivery Tracking**: Real-time status updates via webhooks
+- **Sender ID**: Custom sender IDs (where supported)
+- **Unicode Support**: Full support for special characters and emojis
+
+---
+
 ## 🔑 Authentication
 
 All API requests require authentication using Bearer tokens:
@@ -189,6 +258,43 @@ Authorization: Bearer YOUR_API_KEY
 - ✅ Never expose keys in client-side code
 - ✅ Rotate keys periodically
 - ✅ Use test keys during development
+
+---
+
+## 🧪 Sandbox Mode
+
+Test your integration without making real transactions or incurring charges.
+
+### How It Works
+
+- Use API keys with `sc_test_` prefix
+- All requests return realistic mock responses
+- No actual SMS sent, emails delivered, or data purchased
+- Perfect for development and testing
+
+### Sandbox Response Example
+
+```json
+{
+  "success": true,
+  "sandbox": true,
+  "data": {
+    "message_id": "sandbox_msg_abc123",
+    "status": "sent",
+    "to": "+233540800994",
+    "message": "Test message"
+  },
+  "note": "This is a sandbox transaction. No actual SMS was sent."
+}
+```
+
+### Test Phone Numbers
+
+| Number | Simulated Behavior |
+|--------|-------------------|
+| `+233000000001` | Always succeeds |
+| `+233000000002` | Always fails |
+| `+233000000003` | Delayed delivery |
 
 ---
 
@@ -229,9 +335,21 @@ Authorization: Bearer YOUR_API_KEY
 | `UNAUTHORIZED` | 401 | Invalid or missing API key |
 | `MISSING_FIELD` | 400 | Required field not provided |
 | `INVALID_REQUEST` | 400 | Request body malformed |
+| `INVALID_PHONE_NUMBER` | 400 | Phone number format invalid |
+| `UNSUPPORTED_COUNTRY` | 400 | Country not supported |
 | `INSUFFICIENT_BALANCE` | 402 | Account balance too low |
 | `RATE_LIMITED` | 429 | Too many requests |
+| `PROVIDER_ERROR` | 502 | Upstream provider error |
 | `INTERNAL_ERROR` | 500 | Server error |
+
+### Provider Error Handling
+
+SendComms automatically handles provider failures with:
+
+- **Automatic Retries**: Failed requests are retried up to 3 times
+- **Provider Failover**: If one provider fails, traffic is routed to alternatives
+- **Error Escalation**: Critical errors trigger alerts to our team
+- **Detailed Logging**: All errors are logged with full context
 
 ---
 
@@ -264,6 +382,12 @@ curl -X POST https://api.sendcomms.com/api/v1/webhooks \
 **Data Events**
 - `data.success` - Data bundle activated
 - `data.failed` - Data bundle failed
+
+**SMS Events**
+- `sms.sent` - SMS accepted by provider
+- `sms.delivered` - SMS delivered to recipient
+- `sms.failed` - SMS delivery failed
+- `sms.rejected` - SMS rejected by carrier
 
 ### Verify Webhook Signature
 
@@ -325,10 +449,16 @@ Prices vary by operator and package. Check the dashboard for current rates.
 └───────┼───────────┼───────────┼────────────────┼────────────┘
         │           │           │                │
         ▼           ▼           └────────┬───────┘
-   ┌─────────┐ ┌─────────┐              ▼
-   │  Brevo  │ │ Termii  │        ┌──────────┐
-   │ (Email) │ │  (SMS)  │        │ Reloadly │
-   └─────────┘ └─────────┘        └──────────┘
+   ┌─────────┐ ┌─────────────┐          ▼
+   │  Resend │ │SMS Providers│    ┌──────────┐
+   │ (Email) │ │             │    │ Reloadly │
+   └─────────┘ │  ┌───────┐  │    └──────────┘
+               │  │Twilio │  │
+               │  └───────┘  │
+               │  ┌───────┐  │
+               │  │Termii │  │
+               │  └───────┘  │
+               └─────────────┘
 ```
 
 ---
@@ -339,12 +469,18 @@ Prices vary by operator and package. Check the dashboard for current rates.
 |----------|--------|-------------|
 | `/v1/email/send` | POST | Send single email |
 | `/v1/email/batch` | POST | Send batch emails (up to 100) |
+| `/v1/sms/send` | POST | Send SMS message |
+| `/v1/sms/logs` | GET | Get SMS message logs |
+| `/v1/sms/stats` | GET | Get SMS usage statistics |
+| `/v1/sms/pricing` | GET | Get SMS pricing by country |
 | `/v1/data/purchase` | POST | Purchase data bundle |
 | `/v1/data/operators` | GET | List available operators |
 | `/v1/data/packages` | GET | List data packages |
 | `/v1/webhooks` | POST | Register webhook |
 | `/v1/webhooks` | GET | List webhooks |
 | `/v1/webhooks` | DELETE | Delete webhook |
+| `/v1/keys` | GET | List API keys |
+| `/v1/keys` | POST | Create API key |
 | `/v1/usage` | GET | Get usage statistics |
 
 ---
@@ -408,6 +544,11 @@ npm run dev
 | `BREVO_API_KEY` | Brevo API key |
 | `RELOADLY_CLIENT_ID` | Reloadly client ID |
 | `RELOADLY_CLIENT_SECRET` | Reloadly client secret |
+| `TWILIO_ACCOUNT_SID` | Twilio account SID |
+| `TWILIO_AUTH_TOKEN` | Twilio auth token |
+| `TWILIO_PHONE_NUMBER` | Twilio phone number |
+| `TERMII_API_KEY` | Termii API key |
+| `TERMII_SENDER_ID` | Termii sender ID |
 
 ### Deploy to Vercel
 
@@ -427,17 +568,36 @@ sendcomms/
 ├── app/
 │   ├── api/v1/              # API endpoints
 │   │   ├── email/           # Email endpoints
+│   │   ├── sms/             # SMS endpoints
+│   │   │   ├── send/        # Send SMS
+│   │   │   ├── logs/        # SMS logs
+│   │   │   ├── stats/       # SMS statistics
+│   │   │   └── pricing/     # SMS pricing
 │   │   ├── data/            # Data bundle endpoints
+│   │   ├── keys/            # API key management
 │   │   └── webhooks/        # Webhook management
 │   ├── dashboard/           # User dashboard
+│   │   ├── sms/             # SMS dashboard
+│   │   ├── emails/          # Email dashboard
+│   │   ├── data/            # Data dashboard
+│   │   ├── api-keys/        # API keys page
+│   │   └── billing/         # Billing page
 │   ├── docs/                # API documentation
-│   └── (marketing)/         # Public pages
+│   └── (auth)/              # Auth pages
 ├── lib/                     # Shared utilities
 │   ├── supabase/            # Database client
 │   ├── email/               # Email provider
-│   └── rate-limit/          # Rate limiting
+│   ├── sms/                 # SMS providers
+│   │   ├── router.ts        # Provider routing
+│   │   ├── twilio.ts        # Twilio integration
+│   │   └── termii.ts        # Termii integration
+│   ├── sandbox/             # Sandbox mode
+│   ├── errors/              # Error handling
+│   ├── rate-limit/          # Rate limiting
+│   └── idempotency/         # Idempotency keys
 ├── components/              # React components
-└── public/                  # Static assets
+├── docs/                    # Internal documentation
+└── migrations/              # Database migrations
 ```
 
 ---
