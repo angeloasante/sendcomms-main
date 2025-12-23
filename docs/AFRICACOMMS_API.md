@@ -398,8 +398,8 @@ curl -X POST https://api.africacomms.com/api/v1/data/purchase \
 
 All these formats are accepted:
 - `0540800994` (local)
-- `233248687065` (with country code)
-- `+233248687065` (international)
+- `233540800994` (with country code)
+- `+233540800994` (international)
 
 ### Response
 

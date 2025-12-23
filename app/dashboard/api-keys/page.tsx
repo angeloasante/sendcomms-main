@@ -12,6 +12,7 @@ interface ApiKey {
   created_at: string;
   last_used_at: string | null;
   is_active: boolean;
+  is_test?: boolean;
 }
 
 interface Webhook {
@@ -33,6 +34,7 @@ export default function ApiKeysPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showWebhookModal, setShowWebhookModal] = useState(false);
   const [newKeyName, setNewKeyName] = useState('');
+  const [isTestKey, setIsTestKey] = useState(false);
   const [newWebhookUrl, setNewWebhookUrl] = useState('');
   const [selectedEvents, setSelectedEvents] = useState<string[]>([]);
   const [createdKey, setCreatedKey] = useState<string | null>(null);
@@ -143,7 +145,7 @@ export default function ApiKeysPage() {
       const response = await fetch('/api/v1/keys', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newKeyName.trim() }),
+        body: JSON.stringify({ name: newKeyName.trim(), is_test: isTestKey }),
       });
 
       if (!response.ok) {
@@ -155,6 +157,7 @@ export default function ApiKeysPage() {
       setApiKeys([key, ...apiKeys]);
       setCreatedKey(secret);
       setNewKeyName('');
+      setIsTestKey(false);
     } catch (err) {
       console.error('Error creating API key:', err);
       setError(err instanceof Error ? err.message : 'Failed to create API key');
@@ -269,8 +272,8 @@ export default function ApiKeysPage() {
           
           {/* Header Area */}
           <div>
-            <h1 className="text-xl font-semibold text-white tracking-tight mb-1">Access Management</h1>
-            <p className="text-sm text-gray-500">Manage your API keys and webhook endpoints to authenticate requests.</p>
+            <h1 className="text-xl font-semibold text-foreground tracking-tight mb-1">Access Management</h1>
+            <p className="text-sm text-muted-foreground">Manage your API keys and webhook endpoints to authenticate requests.</p>
           </div>
 
           {/* Error Alert */}
@@ -292,19 +295,19 @@ export default function ApiKeysPage() {
 
           {/* Tabs */}
           <div className="w-full">
-            <div className="border-b border-white/5">
+            <div className="border-b border-border">
               <nav className="flex gap-8" aria-label="Tabs">
                 <button 
                   onClick={() => setActiveTab('keys')}
                   className={`relative py-3 text-sm font-medium transition-colors border-b-2 focus:outline-none ${
                     activeTab === 'keys' 
-                      ? 'text-white border-indigo-500' 
-                      : 'text-gray-500 hover:text-gray-300 border-transparent'
+                      ? 'text-foreground border-indigo-500' 
+                      : 'text-muted-foreground hover:text-foreground border-transparent'
                   }`}
                 >
                   API Keys
                   {apiKeys.length > 0 && (
-                    <span className="ml-2 px-1.5 py-0.5 text-[10px] font-medium bg-white/10 text-gray-300 rounded">
+                    <span className="ml-2 px-1.5 py-0.5 text-[10px] font-medium bg-secondary text-muted-foreground rounded">
                       {apiKeys.length}
                     </span>
                   )}
@@ -313,13 +316,13 @@ export default function ApiKeysPage() {
                   onClick={() => setActiveTab('webhooks')}
                   className={`relative py-3 text-sm font-medium transition-colors border-b-2 focus:outline-none ${
                     activeTab === 'webhooks' 
-                      ? 'text-white border-indigo-500' 
-                      : 'text-gray-500 hover:text-gray-300 border-transparent'
+                      ? 'text-foreground border-indigo-500' 
+                      : 'text-muted-foreground hover:text-foreground border-transparent'
                   }`}
                 >
                   Webhooks
                   {webhooks.length > 0 && (
-                    <span className="ml-2 px-1.5 py-0.5 text-[10px] font-medium bg-white/10 text-gray-300 rounded">
+                    <span className="ml-2 px-1.5 py-0.5 text-[10px] font-medium bg-secondary text-muted-foreground rounded">
                       {webhooks.length}
                     </span>
                   )}
@@ -339,14 +342,14 @@ export default function ApiKeysPage() {
                     </div>
                   ) : apiKeys.length === 0 ? (
                     /* Empty State */
-                    <div className="flex flex-col items-center justify-center py-20 bg-[#121316] border border-white/5 rounded-xl border-dashed">
-                      <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-6 ring-1 ring-white/10 shadow-xl shadow-black/50">
-                        <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="flex flex-col items-center justify-center py-20 bg-card border border-border rounded-xl border-dashed">
+                      <div className="w-16 h-16 rounded-full bg-secondary flex items-center justify-center mb-6 ring-1 ring-border shadow-xl shadow-black/50">
+                        <svg className="w-8 h-8 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
                         </svg>
                       </div>
-                      <h3 className="text-base font-semibold text-white mb-2">No API Keys found</h3>
-                      <p className="text-sm text-gray-500 text-center max-w-sm mb-8">
+                      <h3 className="text-base font-semibold text-foreground mb-2">No API Keys found</h3>
+                      <p className="text-sm text-muted-foreground text-center max-w-sm mb-8">
                         Generate an API key to authenticate your requests to the SendComms API. Treat your secret keys like passwords.
                       </p>
                       <button 
@@ -363,7 +366,7 @@ export default function ApiKeysPage() {
                     /* Keys List */
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">
-                        <p className="text-sm text-gray-400">{apiKeys.length} API key{apiKeys.length !== 1 ? 's' : ''}</p>
+                        <p className="text-sm text-muted-foreground">{apiKeys.length} API key{apiKeys.length !== 1 ? 's' : ''}</p>
                         <button 
                           onClick={() => setShowCreateModal(true)}
                           className="px-3 py-1.5 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg shadow-lg shadow-indigo-500/20 transition-all flex items-center gap-2 border border-indigo-500/50"
@@ -375,11 +378,11 @@ export default function ApiKeysPage() {
                         </button>
                       </div>
 
-                      <div className="bg-[#121316] border border-white/5 rounded-xl overflow-hidden">
+                      <div className="bg-card border border-border rounded-xl overflow-hidden">
                         {apiKeys.map((key, index) => (
                           <div 
                             key={key.id}
-                            className={`p-4 flex items-center justify-between ${index !== apiKeys.length - 1 ? 'border-b border-white/5' : ''}`}
+                            className={`p-4 flex items-center justify-between ${index !== apiKeys.length - 1 ? 'border-b border-border' : ''}`}
                           >
                             <div className="flex items-center gap-4">
                               <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${key.is_active ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
@@ -389,7 +392,12 @@ export default function ApiKeysPage() {
                               </div>
                               <div>
                                 <div className="flex items-center gap-2">
-                                  <h4 className="text-sm font-medium text-white">{key.name}</h4>
+                                  <h4 className="text-sm font-medium text-foreground">{key.name}</h4>
+                                  {key.is_test ? (
+                                    <span className="px-1.5 py-0.5 text-[10px] font-medium bg-amber-500/10 text-amber-400 rounded border border-amber-500/20">Test</span>
+                                  ) : (
+                                    <span className="px-1.5 py-0.5 text-[10px] font-medium bg-blue-500/10 text-blue-400 rounded border border-blue-500/20">Live</span>
+                                  )}
                                   {key.is_active ? (
                                     <span className="px-1.5 py-0.5 text-[10px] font-medium bg-green-500/10 text-green-400 rounded border border-green-500/20">Active</span>
                                   ) : (
@@ -397,13 +405,13 @@ export default function ApiKeysPage() {
                                   )}
                                 </div>
                                 <div className="flex items-center gap-3 mt-1">
-                                  <code className="text-xs font-mono text-gray-500">{key.key_preview || `${key.id.substring(0, 8)}...`}</code>
-                                  <span className="text-xs text-gray-600">•</span>
-                                  <span className="text-xs text-gray-500">Created {formatDate(key.created_at)}</span>
+                                  <code className="text-xs font-mono text-muted-foreground">{key.key_preview || `${key.id.substring(0, 8)}...`}</code>
+                                  <span className="text-xs text-muted-foreground">•</span>
+                                  <span className="text-xs text-muted-foreground">Created {formatDate(key.created_at)}</span>
                                   {key.last_used_at && (
                                     <>
-                                      <span className="text-xs text-gray-600">•</span>
-                                      <span className="text-xs text-gray-500">Last used {formatDate(key.last_used_at)}</span>
+                                      <span className="text-xs text-muted-foreground">•</span>
+                                      <span className="text-xs text-muted-foreground">Last used {formatDate(key.last_used_at)}</span>
                                     </>
                                   )}
                                 </div>
@@ -413,7 +421,7 @@ export default function ApiKeysPage() {
                               <button 
                                 onClick={() => deleteKey(key.id)}
                                 disabled={isDeleting === key.id}
-                                className="p-2 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors disabled:opacity-50"
+                                className="p-2 text-muted-foreground hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors disabled:opacity-50"
                                 title="Revoke key"
                               >
                                 {isDeleting === key.id ? (
@@ -442,19 +450,19 @@ export default function ApiKeysPage() {
                     </div>
                   ) : webhooks.length === 0 ? (
                     /* Empty State */
-                    <div className="flex flex-col items-center justify-center py-20 bg-[#121316] border border-white/5 rounded-xl border-dashed">
-                      <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-6 ring-1 ring-white/10 shadow-xl shadow-black/50">
-                        <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="flex flex-col items-center justify-center py-20 bg-card border border-border rounded-xl border-dashed">
+                      <div className="w-16 h-16 rounded-full bg-secondary flex items-center justify-center mb-6 ring-1 ring-border shadow-xl shadow-black/50">
+                        <svg className="w-8 h-8 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                         </svg>
                       </div>
-                      <h3 className="text-base font-semibold text-white mb-2">No Webhook Endpoints</h3>
-                      <p className="text-sm text-gray-500 text-center max-w-sm mb-8">
+                      <h3 className="text-base font-semibold text-foreground mb-2">No Webhook Endpoints</h3>
+                      <p className="text-sm text-muted-foreground text-center max-w-sm mb-8">
                         Listen for events on your account like message status updates and balance changes by configuring a webhook URL.
                       </p>
                       <button 
                         onClick={() => setShowWebhookModal(true)}
-                        className="px-4 py-2 text-sm font-medium text-gray-200 bg-white/5 hover:bg-white/10 hover:text-white rounded-lg shadow-sm transition-all flex items-center gap-2 border border-white/10"
+                        className="px-4 py-2 text-sm font-medium text-foreground bg-secondary hover:bg-accent hover:text-foreground rounded-lg shadow-sm transition-all flex items-center gap-2 border border-border"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -466,10 +474,10 @@ export default function ApiKeysPage() {
                     /* Webhooks List */
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">
-                        <p className="text-sm text-gray-400">{webhooks.length} webhook endpoint{webhooks.length !== 1 ? 's' : ''}</p>
+                        <p className="text-sm text-muted-foreground">{webhooks.length} webhook endpoint{webhooks.length !== 1 ? 's' : ''}</p>
                         <button 
                           onClick={() => setShowWebhookModal(true)}
-                          className="px-3 py-1.5 text-xs font-medium text-gray-200 bg-white/5 hover:bg-white/10 hover:text-white rounded-lg transition-all flex items-center gap-2 border border-white/10"
+                          className="px-3 py-1.5 text-xs font-medium text-foreground bg-secondary hover:bg-accent hover:text-foreground rounded-lg transition-all flex items-center gap-2 border border-border"
                         >
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -478,11 +486,11 @@ export default function ApiKeysPage() {
                         </button>
                       </div>
 
-                      <div className="bg-[#121316] border border-white/5 rounded-xl overflow-hidden">
+                      <div className="bg-card border border-border rounded-xl overflow-hidden">
                         {webhooks.map((webhook, index) => (
                           <div 
                             key={webhook.id}
-                            className={`p-4 ${index !== webhooks.length - 1 ? 'border-b border-white/5' : ''}`}
+                            className={`p-4 ${index !== webhooks.length - 1 ? 'border-b border-border' : ''}`}
                           >
                             <div className="flex items-center justify-between mb-3">
                               <div className="flex items-center gap-3">
@@ -492,14 +500,14 @@ export default function ApiKeysPage() {
                                   </svg>
                                 </div>
                                 <div>
-                                  <code className="text-sm font-mono text-white">{webhook.url}</code>
-                                  <p className="text-xs text-gray-500 mt-0.5">Created {formatDate(webhook.created_at)}</p>
+                                  <code className="text-sm font-mono text-foreground">{webhook.url}</code>
+                                  <p className="text-xs text-muted-foreground mt-0.5">Created {formatDate(webhook.created_at)}</p>
                                 </div>
                               </div>
                               <button 
                                 onClick={() => deleteWebhook(webhook.id)}
                                 disabled={isDeleting === webhook.id}
-                                className="p-2 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors disabled:opacity-50"
+                                className="p-2 text-muted-foreground hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors disabled:opacity-50"
                               >
                                 {isDeleting === webhook.id ? (
                                   <div className="w-4 h-4 border-2 border-gray-500 border-t-transparent rounded-full animate-spin" />
@@ -532,12 +540,12 @@ export default function ApiKeysPage() {
       {/* Create API Key Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#121316] border border-white/10 rounded-xl w-full max-w-md shadow-2xl">
-            <div className="p-6 border-b border-white/5">
-              <h2 className="text-lg font-semibold text-white">
+          <div className="bg-card border border-border rounded-xl w-full max-w-md shadow-2xl">
+            <div className="p-6 border-b border-border">
+              <h2 className="text-lg font-semibold text-foreground">
                 {createdKey ? 'API Key Created' : 'Create API Key'}
               </h2>
-              <p className="text-sm text-gray-500 mt-1">
+              <p className="text-sm text-muted-foreground mt-1">
                 {createdKey 
                   ? 'Copy your API key now. You won\'t be able to see it again!' 
                   : 'Give your API key a name to help identify it later.'}
@@ -563,11 +571,11 @@ export default function ApiKeysPage() {
                       type="text" 
                       value={createdKey}
                       readOnly
-                      className="w-full bg-[#0b0c0e] border border-white/10 rounded-lg px-4 py-3 pr-12 font-mono text-sm text-white"
+                      className="w-full bg-background border border-border rounded-lg px-4 py-3 pr-12 font-mono text-sm text-foreground"
                     />
                     <button
                       onClick={() => copyToClipboard(createdKey)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-gray-400 hover:text-white transition-colors"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-muted-foreground hover:text-foreground transition-colors"
                     >
                       {copied ? (
                         <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -582,27 +590,71 @@ export default function ApiKeysPage() {
                   </div>
                 </div>
               ) : (
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Key Name</label>
-                  <input 
-                    type="text"
-                    value={newKeyName}
-                    onChange={(e) => setNewKeyName(e.target.value)}
-                    placeholder="e.g., Production API Key"
-                    className="w-full bg-[#0b0c0e] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/20 transition-all placeholder:text-gray-600"
-                  />
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">Key Name</label>
+                    <input 
+                      type="text"
+                      value={newKeyName}
+                      onChange={(e) => setNewKeyName(e.target.value)}
+                      placeholder="e.g., Production API Key"
+                      className="w-full bg-background border border-border rounded-lg px-4 py-2.5 text-sm text-foreground focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/20 transition-all placeholder:text-muted-foreground"
+                    />
+                  </div>
+                  
+                  {/* Test Key Toggle */}
+                  <div className="p-4 bg-background border border-border rounded-lg">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <label className="text-sm font-medium text-foreground">Sandbox Mode</label>
+                        <p className="text-xs text-muted-foreground mt-0.5">Test your integration without charges</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsTestKey(!isTestKey)}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                          isTestKey ? 'bg-amber-500' : 'bg-gray-700'
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            isTestKey ? 'translate-x-6' : 'translate-x-1'
+                          }`}
+                        />
+                      </button>
+                    </div>
+                    
+                    {isTestKey && (
+                      <div className="mt-3 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+                        <div className="flex items-start gap-2">
+                          <svg className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <div className="text-xs text-amber-200">
+                            <p className="font-medium mb-1">Test key features:</p>
+                            <ul className="space-y-0.5 text-amber-200/80">
+                              <li>• Returns mock responses (no real messages sent)</li>
+                              <li>• No balance deductions</li>
+                              <li>• Key will start with <code className="bg-amber-500/20 px-1 rounded">sc_test_</code></li>
+                            </ul>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
 
-            <div className="p-6 border-t border-white/5 flex justify-end gap-3">
+            <div className="p-6 border-t border-border flex justify-end gap-3">
               <button 
                 onClick={() => {
                   setShowCreateModal(false);
                   setCreatedKey(null);
                   setNewKeyName('');
+                  setIsTestKey(false);
                 }}
-                className="px-4 py-2 text-sm font-medium text-gray-400 hover:text-white transition-colors"
+                className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
               >
                 {createdKey ? 'Done' : 'Cancel'}
               </button>
@@ -624,12 +676,12 @@ export default function ApiKeysPage() {
       {/* Create Webhook Modal */}
       {showWebhookModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#121316] border border-white/10 rounded-xl w-full max-w-md shadow-2xl">
-            <div className="p-6 border-b border-white/5">
-              <h2 className="text-lg font-semibold text-white">
+          <div className="bg-card border border-border rounded-xl w-full max-w-md shadow-2xl">
+            <div className="p-6 border-b border-border">
+              <h2 className="text-lg font-semibold text-foreground">
                 {createdWebhookSecret ? 'Webhook Created' : 'Add Webhook Endpoint'}
               </h2>
-              <p className="text-sm text-gray-500 mt-1">
+              <p className="text-sm text-muted-foreground mt-1">
                 {createdWebhookSecret 
                   ? 'Copy your webhook secret to verify incoming requests.'
                   : 'Configure a URL to receive event notifications.'}
@@ -651,17 +703,17 @@ export default function ApiKeysPage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Signing Secret</label>
+                    <label className="block text-sm font-medium text-foreground mb-2">Signing Secret</label>
                     <div className="relative">
                       <input 
                         type="text" 
                         value={createdWebhookSecret}
                         readOnly
-                        className="w-full bg-[#0b0c0e] border border-white/10 rounded-lg px-4 py-3 pr-12 font-mono text-xs text-white"
+                        className="w-full bg-background border border-border rounded-lg px-4 py-3 pr-12 font-mono text-xs text-foreground"
                       />
                       <button
                         onClick={() => copyToClipboard(createdWebhookSecret)}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-gray-400 hover:text-white transition-colors"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-muted-foreground hover:text-foreground transition-colors"
                       >
                         {copied ? (
                           <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -674,27 +726,27 @@ export default function ApiKeysPage() {
                         )}
                       </button>
                     </div>
-                    <p className="text-xs text-gray-500 mt-2">Use this secret to verify webhook signatures.</p>
+                    <p className="text-xs text-muted-foreground mt-2">Use this secret to verify webhook signatures.</p>
                   </div>
                 </div>
               ) : (
                 <>
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Endpoint URL</label>
+                    <label className="block text-sm font-medium text-foreground mb-2">Endpoint URL</label>
                     <input 
                       type="url"
                       value={newWebhookUrl}
                       onChange={(e) => setNewWebhookUrl(e.target.value)}
                       placeholder="https://your-app.com/webhooks/sendcomms"
-                      className="w-full bg-[#0b0c0e] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/20 transition-all placeholder:text-gray-600"
+                      className="w-full bg-background border border-border rounded-lg px-4 py-2.5 text-sm text-foreground focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/20 transition-all placeholder:text-muted-foreground"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Events to listen for</label>
+                    <label className="block text-sm font-medium text-foreground mb-2">Events to listen for</label>
                     <div className="space-y-2 max-h-48 overflow-y-auto">
                       {webhookEvents.map(event => (
-                        <label key={event.id} className="flex items-center gap-3 p-3 bg-[#0b0c0e] border border-white/5 rounded-lg cursor-pointer hover:border-white/10 transition-colors">
+                        <label key={event.id} className="flex items-center gap-3 p-3 bg-background border border-border rounded-lg cursor-pointer hover:bg-accent transition-colors">
                           <input 
                             type="checkbox"
                             checked={selectedEvents.includes(event.id)}
@@ -705,11 +757,11 @@ export default function ApiKeysPage() {
                                 setSelectedEvents(selectedEvents.filter(id => id !== event.id));
                               }
                             }}
-                            className="w-4 h-4 rounded border-white/20 bg-transparent text-indigo-500 focus:ring-indigo-500/20"
+                            className="w-4 h-4 rounded border-border bg-transparent text-indigo-500 focus:ring-indigo-500/20"
                           />
                           <div>
-                            <div className="text-sm font-medium text-white">{event.label}</div>
-                            <div className="text-xs text-gray-500">{event.description}</div>
+                            <div className="text-sm font-medium text-foreground">{event.label}</div>
+                            <div className="text-xs text-muted-foreground">{event.description}</div>
                           </div>
                         </label>
                       ))}
@@ -719,7 +771,7 @@ export default function ApiKeysPage() {
               )}
             </div>
 
-            <div className="p-6 border-t border-white/5 flex justify-end gap-3">
+            <div className="p-6 border-t border-border flex justify-end gap-3">
               <button 
                 onClick={() => {
                   setShowWebhookModal(false);
@@ -727,7 +779,7 @@ export default function ApiKeysPage() {
                   setSelectedEvents([]);
                   setCreatedWebhookSecret(null);
                 }}
-                className="px-4 py-2 text-sm font-medium text-gray-400 hover:text-white transition-colors"
+                className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
               >
                 {createdWebhookSecret ? 'Done' : 'Cancel'}
               </button>

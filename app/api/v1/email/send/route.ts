@@ -14,6 +14,20 @@ import {
 } from '@/lib/api-helpers';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { detectRegion } from '@/lib/region-detection';
+import {
+  handleIdempotency,
+  completeIdempotency,
+  createIdempotentResponse,
+} from '@/lib/idempotency';
+import {
+  handleProviderError,
+  ProviderError,
+  isCustomerError,
+} from '@/lib/errors';
+import { mapResendError } from '@/lib/errors/providers';
+import { isSandboxKey } from '@/lib/sandbox';
+import { getSandboxEmailResponse } from '@/lib/sandbox/responses';
+import { logTestTransaction } from '@/lib/sandbox/logger';
 
 // Lazy-initialized Supabase client
 let supabase: SupabaseClient | null = null;
@@ -127,29 +141,68 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 5. Check for duplicate request (idempotency)
-    if (idempotency_key) {
-      const { data: existing } = await getSupabase()
-        .from('transactions')
-        .select('*')
-        .eq('customer_id', keyData.customer_id)
-        .eq('idempotency_key', idempotency_key)
-        .gte('created_at', new Date(Date.now() - 86400000).toISOString()) // Last 24 hours
-        .single();
+    // Extract API key from header for sandbox check
+    const authHeader = request.headers.get('Authorization');
+    const apiKey = authHeader?.replace('Bearer ', '').trim() || '';
 
-      if (existing) {
-        return NextResponse.json({
-          success: true,
-          data: {
-            id: existing.id,
-            status: existing.status,
-            email_id: existing.provider_id,
-            recipients: recipients.length,
-            message: 'Duplicate request - returning cached response'
-          }
-        }, { 
-          status: 200,
-          headers: rateLimitResult.headers 
+    // 5. SANDBOX MODE CHECK - Return mock response for test keys
+    if (isSandboxKey(apiKey)) {
+      const mockResponse = getSandboxEmailResponse({
+        to: recipients,
+        from: from || 'default@sendcomms.com',
+        subject,
+        html,
+        text,
+        reply_to: replyTo
+      });
+
+      // Log test transaction (fire and forget)
+      logTestTransaction({
+        customer_id: keyData.customer_id,
+        api_key_id: keyData.id,
+        service: 'email',
+        endpoint: '/api/v1/email/send',
+        request_body: { to: recipients, subject, from, html: html ? '[HTML content]' : undefined, text: text ? '[Text content]' : undefined },
+        response_body: mockResponse,
+        transaction_id: mockResponse.id,
+        ip_address: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || undefined,
+        user_agent: request.headers.get('user-agent') || undefined
+      }).catch(err => console.error('[Sandbox Log Error]', err));
+
+      return NextResponse.json({
+        success: true,
+        data: mockResponse
+      }, {
+        headers: rateLimitResult.headers
+      });
+    }
+
+    // 6. Check for duplicate request (idempotency) - using Redis
+    if (idempotency_key) {
+      const idempotencyResult = await handleIdempotency(
+        keyData.customer_id,
+        idempotency_key,
+        'email'
+      );
+
+      if (!idempotencyResult.shouldProcess) {
+        if (idempotencyResult.isLocked) {
+          return NextResponse.json({
+            success: false,
+            error: {
+              code: 'REQUEST_IN_PROGRESS',
+              message: 'Request is being processed. Please wait.',
+            },
+          }, {
+            status: 409,
+            headers: rateLimitResult.headers,
+          });
+        }
+
+        // Return cached response from Redis
+        const cached = createIdempotentResponse(idempotencyResult.cachedResponse);
+        return NextResponse.json(cached.body, {
+          headers: { ...Object.fromEntries(cached.headers), ...rateLimitResult.headers },
         });
       }
     }
@@ -332,6 +385,49 @@ export async function POST(request: NextRequest) {
 
     // 14. Return response
     if (!result.success) {
+      // Check if this is a provider error that needs escalation
+      const errorStr = result.error || '';
+      const isProviderIssue = 
+        errorStr.includes('limit') ||
+        errorStr.includes('quota') ||
+        errorStr.includes('unauthorized') ||
+        errorStr.includes('api key') ||
+        errorStr.includes('suspended') ||
+        errorStr.includes('timeout') ||
+        errorStr.includes('unavailable');
+
+      if (isProviderIssue) {
+        // Map and handle as provider error
+        const providerError = mapResendError({ message: result.error });
+
+        // This will log and potentially escalate
+        await handleProviderError(
+          {
+            service: 'email',
+            provider: 'resend',
+            customer_id: keyData.customer_id,
+            transaction_id: transactionId,
+            request: { to: recipients, subject, from },
+            error: { message: result.error }
+          },
+          providerError
+        );
+
+        // Return generic message to customer
+        return NextResponse.json({
+          success: false,
+          error: {
+            code: 'EMAIL_SEND_FAILED',
+            message: 'Failed to send email. Please try again in a few minutes.',
+            transaction_id: transactionId
+          }
+        }, { 
+          status: 503,
+          headers: rateLimitResult.headers
+        });
+      }
+
+      // Non-provider error - safe to show to customer
       const response = NextResponse.json({
         success: false,
         error: {
@@ -346,16 +442,31 @@ export async function POST(request: NextRequest) {
       return response;
     }
 
+    // Build success response data
+    const responseData = {
+      id: transactionId,
+      email_id: result.id,
+      status: 'sent',
+      recipients: recipientCount,
+      cost: price,
+      currency: 'USD'
+    };
+
+    // Store idempotency response in Redis
+    if (idempotency_key) {
+      await completeIdempotency(
+        keyData.customer_id,
+        idempotency_key,
+        'email',
+        responseData,
+        200,
+        transactionId
+      );
+    }
+
     const response = NextResponse.json({
       success: true,
-      data: {
-        id: transactionId,
-        email_id: result.id,
-        status: 'sent',
-        recipients: recipientCount,
-        cost: price,
-        currency: 'USD'
-      }
+      data: responseData
     }, { 
       status: 200,
       headers: rateLimitResult.headers
@@ -366,6 +477,16 @@ export async function POST(request: NextRequest) {
   } catch (error: unknown) {
     console.error('Email API Error:', error);
     
+    // Handle customer errors (safe to show to user)
+    if (isCustomerError(error)) {
+      return errorResponse(
+        error.message,
+        error.httpStatus,
+        error.code,
+        error.details
+      );
+    }
+
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     
     if (errorMessage === 'Insufficient balance') {
@@ -383,11 +504,27 @@ export async function POST(request: NextRequest) {
         'ACCOUNT_SUSPENDED'
       );
     }
-    
-    return errorResponse(
-      'Internal server error. Please try again.',
-      500,
-      'INTERNAL_ERROR'
+
+    // Handle provider errors
+    let providerError: ProviderError;
+    if (error instanceof ProviderError) {
+      providerError = error;
+    } else {
+      providerError = mapResendError(error);
+    }
+
+    // Handle the provider error (logs, escalates, returns sanitized message)
+    const { customerMessage, customerCode, httpStatus } = await handleProviderError(
+      {
+        service: 'email',
+        provider: 'resend',
+        customer_id: 'unknown',
+        request: {},
+        error
+      },
+      providerError
     );
+
+    return errorResponse(customerMessage, httpStatus, customerCode);
   }
 }

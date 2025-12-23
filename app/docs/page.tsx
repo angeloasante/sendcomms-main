@@ -48,7 +48,7 @@ export default function DocsIntroPage() {
               <span className="text-lg">💬</span>
               <h3 className="text-white font-semibold text-sm">SMS API</h3>
             </div>
-            <p className="text-gray-500 text-xs">SMS across 50+ African countries</p>
+            <p className="text-gray-500 text-xs">SMS across 180+ countries</p>
           </Link>
 
           <Link href="/docs/api/data" className="group p-4 bg-[#121316] border border-white/10 rounded-lg hover:border-blue-500/50 transition-all">
@@ -98,7 +98,7 @@ export default function DocsIntroPage() {
               <ul className="space-y-2 text-gray-400 text-xs">
                 <li className="flex items-start gap-2">
                   <span className="text-green-400 mt-0.5">✓</span>
-                  <strong className="text-white">One API</strong> to send SMS across 50+ countries
+                  <strong className="text-white">One API</strong> to send SMS across 180+ countries
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-green-400 mt-0.5">✓</span>

@@ -300,18 +300,41 @@ export function successResponse(data: unknown, status = 200, headers?: Headers) 
   return response;
 }
 
+// Error code to docs anchor mapping
+const ERROR_DOCS_ANCHORS: Record<string, string> = {
+  'UNAUTHORIZED': '#client-error-codes',
+  'ACCOUNT_SUSPENDED': '#client-error-codes',
+  'INSUFFICIENT_BALANCE': '#client-error-codes',
+  'RATE_LIMIT_EXCEEDED': '#client-error-codes',
+  'INVALID_PHONE_NUMBER': '#client-error-codes',
+  'INVALID_EMAIL': '#client-error-codes',
+  'MESSAGE_TOO_LONG': '#client-error-codes',
+  'MISSING_FIELD': '#client-error-codes',
+  'INVALID_REQUEST': '#client-error-codes',
+  'INVALID_JSON': '#client-error-codes',
+  'SMS_SEND_FAILED': '#service-error-codes',
+  'EMAIL_SEND_FAILED': '#service-error-codes',
+  'DATA_PURCHASE_FAILED': '#service-error-codes',
+  'AIRTIME_PURCHASE_FAILED': '#service-error-codes',
+  'INTERNAL_ERROR': '#service-error-codes',
+};
+
 export function errorResponse(
   message: string, 
   status = 400, 
   code?: string,
   details?: Record<string, unknown>
 ) {
+  const errorCode = code || 'ERROR';
+  const anchor = ERROR_DOCS_ANCHORS[errorCode] || '';
+  
   return NextResponse.json({
     success: false,
     error: {
-      code: code || 'ERROR',
+      code: errorCode,
       message,
-      ...details
+      ...details,
+      docs_url: `https://docs.sendcomms.com/docs/errors${anchor}`
     }
   }, { status });
 }

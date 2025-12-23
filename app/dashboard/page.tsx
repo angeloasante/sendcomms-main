@@ -118,7 +118,7 @@ export default function DashboardPage() {
       <div className="p-8 flex items-center justify-center min-h-screen">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-500 mx-auto mb-4"></div>
-          <p className="text-gray-400">Loading dashboard...</p>
+          <p className="text-muted-foreground">Loading dashboard...</p>
         </div>
       </div>
     );
@@ -136,27 +136,27 @@ export default function DashboardPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
         <div>
           <div className="flex items-center gap-3 mb-1">
-            <h1 className="text-xl font-semibold text-white tracking-tight">API Command Center</h1>
+            <h1 className="text-xl font-semibold text-foreground tracking-tight">API Command Center</h1>
             <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-500/10 text-green-400 border border-green-500/20">
               <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
               All Systems Operational
             </span>
           </div>
-          <p className="text-sm text-gray-500">Real-time monitoring • Last updated: {lastUpdated}</p>
+          <p className="text-sm text-muted-foreground">Real-time monitoring • Last updated: {lastUpdated}</p>
         </div>
         
         <div className="flex items-center gap-3">
           <button 
             onClick={handleRefresh}
             disabled={loading}
-            className="px-3 py-1.5 text-xs font-medium text-gray-400 bg-white/5 hover:bg-white/10 border border-white/5 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
+            className="px-3 py-1.5 text-xs font-medium text-muted-foreground bg-secondary hover:bg-accent border border-border rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
           >
             <svg className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
             Refresh
           </button>
-          <button className="px-3 py-1.5 text-xs font-medium text-gray-400 bg-white/5 hover:bg-white/10 border border-white/5 rounded-lg transition-colors flex items-center gap-2">
+          <button className="px-3 py-1.5 text-xs font-medium text-muted-foreground bg-secondary hover:bg-accent border border-border rounded-lg transition-colors flex items-center gap-2">
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
             </svg>
@@ -181,7 +181,7 @@ export default function DashboardPage() {
         <div className="col-span-12 xl:col-span-8 space-y-6">
           
           {/* Map Card */}
-          <div className="bg-[#121316] border border-white/5 rounded-xl p-6 relative overflow-hidden group">
+          <div className="bg-card border border-border rounded-xl p-6 relative overflow-hidden group">
             <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{
               backgroundImage: 'radial-gradient(#27272a 1px, transparent 1px)',
               backgroundSize: '20px 20px'
@@ -193,19 +193,19 @@ export default function DashboardPage() {
                   <svg className="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  <h3 className="text-sm font-semibold text-white">Global API Distribution</h3>
+                  <h3 className="text-sm font-semibold text-card-foreground">Global API Distribution</h3>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">Request distribution across African regions</p>
+                <p className="text-xs text-muted-foreground mt-1">Request distribution </p>
               </div>
               <div className="flex items-center gap-2">
-                <span className="px-2 py-1 bg-white/5 border border-white/5 rounded text-[10px] font-medium text-gray-400">
+                <span className="px-2 py-1 bg-secondary border border-border rounded text-[10px] font-medium text-muted-foreground">
                   {Object.values(stats.regionStats).filter(v => v > 0).length} Active Regions
                 </span>
               </div>
             </div>
 
             {/* Stylized Map Visualization */}
-            <div className="relative h-64 w-full bg-[#16181b] rounded-lg border border-white/5 mb-6 overflow-hidden flex items-center justify-center">
+            <div className="relative h-64 w-full bg-muted rounded-lg border border-border mb-6 overflow-hidden flex items-center justify-center">
               {/* Background Pattern */}
               <div className="absolute inset-0 opacity-10" style={{
                 background: 'repeating-linear-gradient(45deg, #18181b, #18181b 2px, transparent 2px, transparent 4px)'
@@ -291,47 +291,47 @@ export default function DashboardPage() {
 
             {/* Legend */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-              <div className="flex items-center justify-between p-2 rounded bg-white/[0.02]">
+              <div className="flex items-center justify-between p-2 rounded bg-secondary/50">
                 <div className="flex items-center gap-2">
                   <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>
-                  <span className="text-xs text-gray-400">West</span>
+                  <span className="text-xs text-muted-foreground">West</span>
                 </div>
-                <span className="text-xs font-mono font-medium text-white">{formatNumber(stats.regionStats['West Africa'] || 0)}</span>
+                <span className="text-xs font-mono font-medium text-foreground">{formatNumber(stats.regionStats['West Africa'] || 0)}</span>
               </div>
-              <div className="flex items-center justify-between p-2 rounded bg-white/[0.02]">
+              <div className="flex items-center justify-between p-2 rounded bg-secondary/50">
                 <div className="flex items-center gap-2">
                   <div className="w-1.5 h-1.5 rounded-full bg-purple-500"></div>
-                  <span className="text-xs text-gray-400">East</span>
+                  <span className="text-xs text-muted-foreground">East</span>
                 </div>
-                <span className="text-xs font-mono font-medium text-white">{formatNumber(stats.regionStats['East Africa'] || 0)}</span>
+                <span className="text-xs font-mono font-medium text-foreground">{formatNumber(stats.regionStats['East Africa'] || 0)}</span>
               </div>
-              <div className="flex items-center justify-between p-2 rounded bg-white/[0.02]">
+              <div className="flex items-center justify-between p-2 rounded bg-secondary/50">
                 <div className="flex items-center gap-2">
                   <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
-                  <span className="text-xs text-gray-400">North</span>
+                  <span className="text-xs text-muted-foreground">North</span>
                 </div>
-                <span className="text-xs font-mono font-medium text-white">{formatNumber(stats.regionStats['North Africa'] || 0)}</span>
+                <span className="text-xs font-mono font-medium text-foreground">{formatNumber(stats.regionStats['North Africa'] || 0)}</span>
               </div>
-              <div className="flex items-center justify-between p-2 rounded bg-white/[0.02]">
+              <div className="flex items-center justify-between p-2 rounded bg-secondary/50">
                 <div className="flex items-center gap-2">
                   <div className="w-1.5 h-1.5 rounded-full bg-orange-500"></div>
-                  <span className="text-xs text-gray-400">South</span>
+                  <span className="text-xs text-muted-foreground">South</span>
                 </div>
-                <span className="text-xs font-mono font-medium text-white">{formatNumber(stats.regionStats['South Africa'] || 0)}</span>
+                <span className="text-xs font-mono font-medium text-foreground">{formatNumber(stats.regionStats['South Africa'] || 0)}</span>
               </div>
-              <div className="flex items-center justify-between p-2 rounded bg-white/[0.02]">
+              <div className="flex items-center justify-between p-2 rounded bg-secondary/50">
                 <div className="flex items-center gap-2">
                   <div className="w-1.5 h-1.5 rounded-full bg-cyan-500"></div>
-                  <span className="text-xs text-gray-400">Central</span>
+                  <span className="text-xs text-muted-foreground">Central</span>
                 </div>
-                <span className="text-xs font-mono font-medium text-white">{formatNumber(stats.regionStats['Central Africa'] || 0)}</span>
+                <span className="text-xs font-mono font-medium text-foreground">{formatNumber(stats.regionStats['Central Africa'] || 0)}</span>
               </div>
-              <div className="flex items-center justify-between p-2 rounded bg-white/[0.02]">
+              <div className="flex items-center justify-between p-2 rounded bg-secondary/50">
                 <div className="flex items-center gap-2">
                   <div className="w-1.5 h-1.5 rounded-full bg-gray-500"></div>
-                  <span className="text-xs text-gray-400">Other</span>
+                  <span className="text-xs text-muted-foreground">Other</span>
                 </div>
-                <span className="text-xs font-mono font-medium text-white">{formatNumber(stats.regionStats['Other'] || 0)}</span>
+                <span className="text-xs font-mono font-medium text-foreground">{formatNumber(stats.regionStats['Other'] || 0)}</span>
               </div>
             </div>
           </div>
@@ -340,19 +340,19 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             
             {/* Donut Chart Card */}
-            <div className="bg-[#121316] border border-white/5 rounded-xl p-6">
+            <div className="bg-card border border-border rounded-xl p-6">
               <div className="mb-6">
-                <h3 className="text-sm font-semibold text-white">Service Usage</h3>
-                <p className="text-xs text-gray-500 mt-1">Request distribution by endpoint type</p>
+                <h3 className="text-sm font-semibold text-card-foreground">Service Usage</h3>
+                <p className="text-xs text-muted-foreground mt-1">Request distribution by endpoint type</p>
               </div>
 
               <div className="flex items-center justify-center mb-6">
                 <div className="relative w-40 h-40 rounded-full" style={{
-                  background: stats.monthly.total > 0 ? conicGradient : '#1e2024'
+                  background: stats.monthly.total > 0 ? conicGradient : 'var(--muted)'
                 }}>
-                  <div className="absolute inset-4 bg-[#121316] rounded-full flex items-center justify-center flex-col">
-                    <span className="text-2xl font-bold text-white tracking-tight">{formatNumber(stats.monthly.total)}</span>
-                    <span className="text-[10px] text-gray-500 uppercase font-medium">Requests</span>
+                  <div className="absolute inset-4 bg-card rounded-full flex items-center justify-center flex-col">
+                    <span className="text-2xl font-bold text-card-foreground tracking-tight">{formatNumber(stats.monthly.total)}</span>
+                    <span className="text-[10px] text-muted-foreground uppercase font-medium">Requests</span>
                   </div>
                 </div>
               </div>
@@ -361,49 +361,49 @@ export default function DashboardPage() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                    <span className="text-xs text-gray-400">Email API</span>
+                    <span className="text-xs text-muted-foreground">Email API</span>
                   </div>
-                  <span className="text-xs font-mono text-white">{stats.serviceUsage.email}%</span>
+                  <span className="text-xs font-mono text-foreground">{stats.serviceUsage.email}%</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                    <span className="text-xs text-gray-400">SMS API</span>
+                    <span className="text-xs text-muted-foreground">SMS API</span>
                   </div>
-                  <span className="text-xs font-mono text-white">{stats.serviceUsage.sms}%</span>
+                  <span className="text-xs font-mono text-foreground">{stats.serviceUsage.sms}%</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
-                    <span className="text-xs text-gray-400">Airtime</span>
+                    <span className="text-xs text-muted-foreground">Airtime</span>
                   </div>
-                  <span className="text-xs font-mono text-white">{stats.serviceUsage.airtime}%</span>
+                  <span className="text-xs font-mono text-foreground">{stats.serviceUsage.airtime}%</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full bg-purple-500"></div>
-                    <span className="text-xs text-gray-400">Data</span>
+                    <span className="text-xs text-muted-foreground">Data</span>
                   </div>
-                  <span className="text-xs font-mono text-white">{stats.serviceUsage.data}%</span>
+                  <span className="text-xs font-mono text-foreground">{stats.serviceUsage.data}%</span>
                 </div>
               </div>
             </div>
 
             {/* Bar Chart Card */}
-            <div className="bg-[#121316] border border-white/5 rounded-xl p-6">
+            <div className="bg-card border border-border rounded-xl p-6">
               <div className="mb-6">
-                <h3 className="text-sm font-semibold text-white">Delivery Status</h3>
-                <p className="text-xs text-gray-500 mt-1">Message delivery performance</p>
+                <h3 className="text-sm font-semibold text-card-foreground">Delivery Status</h3>
+                <p className="text-xs text-muted-foreground mt-1">Message delivery performance</p>
               </div>
 
               <div className="space-y-4 pt-2">
                 {/* Bar 1 */}
                 <div className="group">
                   <div className="flex justify-between text-xs mb-1.5">
-                    <span className="text-gray-400 font-mono">DELIVERED</span>
-                    <span className="text-white font-mono">{stats.deliveryStatus.delivered}%</span>
+                    <span className="text-muted-foreground font-mono">DELIVERED</span>
+                    <span className="text-foreground font-mono">{stats.deliveryStatus.delivered}%</span>
                   </div>
-                  <div className="w-full bg-[#1e2024] rounded-full h-6 relative overflow-hidden">
+                  <div className="w-full bg-muted rounded-full h-6 relative overflow-hidden">
                     <div className="bg-green-500/30 absolute inset-0 rounded-full group-hover:bg-green-500/40 transition-colors duration-300" style={{ width: `${stats.deliveryStatus.delivered}%` }}></div>
                   </div>
                 </div>
@@ -411,10 +411,10 @@ export default function DashboardPage() {
                 {/* Bar 2 */}
                 <div className="group">
                   <div className="flex justify-between text-xs mb-1.5">
-                    <span className="text-gray-400 font-mono">SENT</span>
-                    <span className="text-white font-mono">{stats.deliveryStatus.sent}%</span>
+                    <span className="text-muted-foreground font-mono">SENT</span>
+                    <span className="text-foreground font-mono">{stats.deliveryStatus.sent}%</span>
                   </div>
-                  <div className="w-full bg-[#1e2024] rounded-full h-6 relative overflow-hidden">
+                  <div className="w-full bg-muted rounded-full h-6 relative overflow-hidden">
                     <div className="bg-blue-500/30 absolute inset-0 rounded-full group-hover:bg-blue-500/40 transition-colors duration-300" style={{ width: `${stats.deliveryStatus.sent}%` }}></div>
                   </div>
                 </div>
@@ -422,10 +422,10 @@ export default function DashboardPage() {
                 {/* Bar 3 */}
                 <div className="group">
                   <div className="flex justify-between text-xs mb-1.5">
-                    <span className="text-gray-400 font-mono">FAILED</span>
-                    <span className="text-white font-mono">{stats.deliveryStatus.failed}%</span>
+                    <span className="text-muted-foreground font-mono">FAILED</span>
+                    <span className="text-foreground font-mono">{stats.deliveryStatus.failed}%</span>
                   </div>
-                  <div className="w-full bg-[#1e2024] rounded-full h-6 relative overflow-hidden">
+                  <div className="w-full bg-muted rounded-full h-6 relative overflow-hidden">
                     <div className="bg-red-500/30 absolute inset-0 rounded-full group-hover:bg-red-500/40 transition-colors duration-300" style={{ width: `${stats.deliveryStatus.failed}%` }}></div>
                   </div>
                 </div>
@@ -433,10 +433,10 @@ export default function DashboardPage() {
                 {/* Bar 4 */}
                 <div className="group">
                   <div className="flex justify-between text-xs mb-1.5">
-                    <span className="text-gray-400 font-mono">BOUNCED</span>
-                    <span className="text-white font-mono">{stats.deliveryStatus.bounced}%</span>
+                    <span className="text-muted-foreground font-mono">BOUNCED</span>
+                    <span className="text-foreground font-mono">{stats.deliveryStatus.bounced}%</span>
                   </div>
-                  <div className="w-full bg-[#1e2024] rounded-full h-6 relative overflow-hidden">
+                  <div className="w-full bg-muted rounded-full h-6 relative overflow-hidden">
                     <div className="bg-yellow-500/30 absolute inset-0 rounded-full group-hover:bg-yellow-500/40 transition-colors duration-300" style={{ width: `${stats.deliveryStatus.bounced}%` }}></div>
                   </div>
                 </div>
@@ -451,53 +451,53 @@ export default function DashboardPage() {
           
           {/* Quick Stats */}
           <div className="grid grid-cols-2 gap-4">
-            <div className="bg-[#121316] border border-white/5 rounded-xl p-4">
+            <div className="bg-card border border-border rounded-xl p-4">
               <div className="flex items-center gap-2 mb-2">
                 <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                 </svg>
-                <span className="text-xs text-gray-400">Emails Today</span>
+                <span className="text-xs text-muted-foreground">Emails Today</span>
               </div>
-              <div className="text-2xl font-bold text-white">{formatNumber(stats.today.email)}</div>
-              <div className="text-[10px] text-gray-500 mt-1">
+              <div className="text-2xl font-bold text-card-foreground">{formatNumber(stats.today.email)}</div>
+              <div className="text-[10px] text-muted-foreground mt-1">
                 {stats.monthly.email} this month
               </div>
             </div>
-            <div className="bg-[#121316] border border-white/5 rounded-xl p-4">
+            <div className="bg-card border border-border rounded-xl p-4">
               <div className="flex items-center gap-2 mb-2">
                 <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                 </svg>
-                <span className="text-xs text-gray-400">SMS Today</span>
+                <span className="text-xs text-muted-foreground">SMS Today</span>
               </div>
-              <div className="text-2xl font-bold text-white">{formatNumber(stats.today.sms)}</div>
-              <div className="text-[10px] text-gray-500 mt-1">
+              <div className="text-2xl font-bold text-card-foreground">{formatNumber(stats.today.sms)}</div>
+              <div className="text-[10px] text-muted-foreground mt-1">
                 {stats.monthly.sms} this month
               </div>
             </div>
           </div>
 
           {/* Account Info */}
-          <div className="bg-[#121316] border border-white/5 rounded-xl p-4">
+          <div className="bg-card border border-border rounded-xl p-4">
             <div className="flex items-center justify-between mb-3">
-              <span className="text-xs text-gray-400">Account Balance</span>
+              <span className="text-xs text-muted-foreground">Account Balance</span>
               <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 uppercase">
                 {stats.customer.plan}
               </span>
             </div>
-            <div className="text-2xl font-bold text-white">${stats.customer.balance.toFixed(2)}</div>
-            <div className="flex items-center gap-4 mt-3 pt-3 border-t border-white/5">
+            <div className="text-2xl font-bold text-card-foreground">${stats.customer.balance.toFixed(2)}</div>
+            <div className="flex items-center gap-4 mt-3 pt-3 border-t border-border">
               <div className="flex items-center gap-1.5">
-                <svg className="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-3.5 h-3.5 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
                 </svg>
-                <span className="text-xs text-gray-400">{stats.counts.apiKeys} API keys</span>
+                <span className="text-xs text-muted-foreground">{stats.counts.apiKeys} API keys</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <svg className="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-3.5 h-3.5 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                 </svg>
-                <span className="text-xs text-gray-400">{stats.counts.webhooks} webhooks</span>
+                <span className="text-xs text-muted-foreground">{stats.counts.webhooks} webhooks</span>
               </div>
             </div>
           </div>
@@ -506,25 +506,25 @@ export default function DashboardPage() {
           <div>
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
-                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 text-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
-                <h3 className="text-sm font-semibold text-white">Top Endpoints</h3>
+                <h3 className="text-sm font-semibold text-foreground">Top Endpoints</h3>
               </div>
               <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-green-900/40 text-green-400 border border-green-500/20">Live</span>
             </div>
-            <p className="text-xs text-gray-500 mb-4">Most requested APIs this month</p>
+            <p className="text-xs text-muted-foreground mb-4">Most requested APIs this month</p>
 
-            <div className="bg-[#121316] border border-white/5 rounded-xl overflow-hidden">
+            <div className="bg-card border border-border rounded-xl overflow-hidden">
               {stats.topEndpoints.length > 0 ? (
                 stats.topEndpoints.map((endpoint, index) => (
                   <Link 
                     key={endpoint.path}
                     href="/docs/api/email" 
-                    className={`p-4 ${index < stats.topEndpoints.length - 1 ? 'border-b border-white/5' : ''} hover:bg-white/[0.02] transition-colors group cursor-pointer block`}
+                    className={`p-4 ${index < stats.topEndpoints.length - 1 ? 'border-b border-border' : ''} hover:bg-accent/50 transition-colors group cursor-pointer block`}
                   >
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-mono font-medium text-gray-300 group-hover:text-blue-400 transition-colors">{endpoint.path}</span>
+                      <span className="text-xs font-mono font-medium text-muted-foreground group-hover:text-blue-400 transition-colors">{endpoint.path}</span>
                       <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
                         endpoint.path.includes('email') ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
                         endpoint.path.includes('sms') ? 'bg-green-500/10 text-green-400 border border-green-500/20' :
@@ -532,7 +532,7 @@ export default function DashboardPage() {
                       }`}>{endpoint.method}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-xs text-gray-500">{formatNumber(endpoint.requests)} requests</span>
+                      <span className="text-xs text-muted-foreground">{formatNumber(endpoint.requests)} requests</span>
                       <span className={`text-[10px] font-medium flex items-center gap-0.5 ${endpoint.change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={endpoint.change >= 0 ? "M7 17l9.2-9.2M17 17V7H7" : "M17 7l-9.2 9.2M7 7v10h10"} />
@@ -544,7 +544,7 @@ export default function DashboardPage() {
                 ))
               ) : (
                 <div className="p-6 text-center">
-                  <p className="text-xs text-gray-500">No API calls yet</p>
+                  <p className="text-xs text-muted-foreground">No API calls yet</p>
                   <Link href="/docs/quickstart" className="text-xs text-indigo-400 hover:underline mt-1 inline-block">Get started →</Link>
                 </div>
               )}
@@ -555,17 +555,17 @@ export default function DashboardPage() {
           <div>
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
-                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 text-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <h3 className="text-sm font-semibold text-white">Recent Activity</h3>
+                <h3 className="text-sm font-semibold text-foreground">Recent Activity</h3>
               </div>
             </div>
 
             <div className="space-y-3">
               {stats.recentActivity.length > 0 ? (
                 stats.recentActivity.slice(0, 3).map((activity) => (
-                  <div key={activity.id} className="bg-[#121316] border border-white/5 rounded-xl p-4 hover:border-white/10 transition-colors">
+                  <div key={activity.id} className="bg-card border border-border rounded-xl p-4 hover:border-border transition-colors">
                     <div className="flex items-start gap-3">
                       <div className={`p-2 rounded-lg shrink-0 ${
                         activity.type.includes('email') ? 'bg-blue-500/10 text-blue-400' :
@@ -588,12 +588,12 @@ export default function DashboardPage() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between mb-1">
-                          <h4 className="text-xs font-semibold text-white capitalize">
+                          <h4 className="text-xs font-semibold text-card-foreground capitalize">
                             {activity.type.replace('_', ' ')} {activity.status}
                           </h4>
-                          <span className="text-[10px] text-gray-500">{activity.timeAgo}</span>
+                          <span className="text-[10px] text-muted-foreground">{activity.timeAgo}</span>
                         </div>
-                        <p className="text-xs text-gray-400 truncate">
+                        <p className="text-xs text-muted-foreground truncate">
                           {activity.recipientCount > 1 
                             ? `${activity.recipientCount} recipients` 
                             : activity.destination || 'No destination'}
@@ -603,15 +603,15 @@ export default function DashboardPage() {
                   </div>
                 ))
               ) : (
-                <div className="bg-[#121316] border border-white/5 rounded-xl p-6 text-center">
-                  <p className="text-xs text-gray-500">No recent activity</p>
+                <div className="bg-card border border-border rounded-xl p-6 text-center">
+                  <p className="text-xs text-muted-foreground">No recent activity</p>
                   <Link href="/docs/quickstart" className="text-xs text-indigo-400 hover:underline mt-1 inline-block">Send your first message →</Link>
                 </div>
               )}
             </div>
 
             {stats.recentActivity.length > 0 && (
-              <button className="w-full mt-4 py-2 text-xs font-medium text-gray-400 bg-white/5 border border-white/5 rounded-lg hover:text-white hover:bg-white/10 transition-all">
+              <button className="w-full mt-4 py-2 text-xs font-medium text-muted-foreground bg-secondary border border-border rounded-lg hover:text-foreground hover:bg-accent transition-all">
                 View All Activity
               </button>
             )}

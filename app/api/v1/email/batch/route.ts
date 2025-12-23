@@ -12,6 +12,9 @@ import {
   errorResponse
 } from '@/lib/api-helpers';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { isSandboxKey } from '@/lib/sandbox';
+import { getSandboxBatchEmailResponse } from '@/lib/sandbox/responses';
+import { logTestTransaction } from '@/lib/sandbox/logger';
 
 // Lazy-initialized Supabase client
 let supabase: SupabaseClient | null = null;
@@ -108,6 +111,38 @@ export async function POST(request: NextRequest) {
         from: email.from,
         replyTo: email.replyTo,
         tags: email.tags
+      });
+    }
+
+    // Extract API key from header for sandbox check
+    const authHeader = request.headers.get('Authorization');
+    const apiKey = authHeader?.replace('Bearer ', '').trim() || '';
+
+    // SANDBOX MODE CHECK - Return mock response for test keys
+    if (isSandboxKey(apiKey)) {
+      const mockResponse = getSandboxBatchEmailResponse({
+        emails: validatedEmails,
+        totalRecipients
+      });
+
+      // Log test transaction (fire and forget)
+      logTestTransaction({
+        customer_id: keyData.customer_id,
+        api_key_id: keyData.id,
+        service: 'email',
+        endpoint: '/api/v1/email/batch',
+        request_body: { emails: validatedEmails },
+        response_body: mockResponse,
+        transaction_id: mockResponse.batch_id,
+        ip_address: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || undefined,
+        user_agent: request.headers.get('user-agent') || undefined
+      }).catch(err => console.error('[Sandbox Log Error]', err));
+
+      return NextResponse.json({
+        success: true,
+        data: mockResponse
+      }, {
+        headers: rateLimitResult.headers
       });
     }
 

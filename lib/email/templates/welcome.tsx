@@ -63,7 +63,7 @@ export const WelcomeEmail = ({ name, apiKey }: WelcomeEmailProps) => (
         
         <Section style={features}>
           <Heading as="h2" style={h2}>What you can do:</Heading>
-          <Text style={featureItem}>📱 Send SMS across 50+ African countries</Text>
+          <Text style={featureItem}>📱 Send SMS across 180+ countries</Text>
           <Text style={featureItem}>📧 Send transactional & marketing emails</Text>
           <Text style={featureItem}>📞 Purchase airtime for any carrier</Text>
           <Text style={featureItem}>📶 Buy mobile data bundles</Text>

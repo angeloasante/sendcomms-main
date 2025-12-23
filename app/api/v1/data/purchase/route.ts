@@ -8,6 +8,21 @@ import {
   errorResponse,
   logUsage
 } from '@/lib/api-helpers';
+import { withRateLimit } from '@/lib/rate-limit/middleware';
+import { 
+  handleIdempotency, 
+  completeIdempotency,
+  createIdempotentResponse 
+} from '@/lib/idempotency';
+import {
+  handleProviderError,
+  ProviderError,
+  isCustomerError,
+} from '@/lib/errors';
+import { mapDataMartError, mapReloadlyError } from '@/lib/errors/providers';
+import { isSandboxKey } from '@/lib/sandbox';
+import { getSandboxDataResponse } from '@/lib/sandbox/responses';
+import { logTestTransaction } from '@/lib/sandbox/logger';
 
 // Datamart API Configuration
 const DATAMART_API_URL = process.env.DATAMART_API_URL || 'https://api.datamartgh.shop/api/developer';
@@ -47,17 +62,58 @@ export async function POST(request: NextRequest) {
     const customerId = keyData.customer_id;
     const apiKeyId = keyData.id;
 
-    // 2. Parse request body
+    // 2. Rate limiting check
+    const rateLimitResult = await withRateLimit(
+      request,
+      customerId, 
+      keyData.customers.plan || 'free',
+      'data'
+    );
+    
+    if (rateLimitResult instanceof NextResponse) {
+      return rateLimitResult;
+    }
+
+    // 3. Parse request body
     const body = await request.json();
     const { 
       phone_number, 
       network, 
       capacity_gb,
       reference,
+      idempotency_key,
       metadata 
     } = body;
 
-    // 3. Validate required fields
+    // 4. Check idempotency (prevent duplicate purchases)
+    if (idempotency_key) {
+      const idempotencyResult = await handleIdempotency(
+        customerId,
+        idempotency_key,
+        'data'
+      );
+
+      if (!idempotencyResult.shouldProcess) {
+        if (idempotencyResult.isLocked) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: {
+                message: 'Request is being processed. Please wait.',
+                code: 'REQUEST_IN_PROGRESS'
+              }
+            },
+            { status: 409 }
+          );
+        }
+
+        // Return cached response
+        const cached = createIdempotentResponse(idempotencyResult.cachedResponse);
+        return NextResponse.json(cached.body, { headers: cached.headers });
+      }
+    }
+
+    // 5. Validate required fields
     if (!phone_number) {
       return errorResponse('phone_number is required', 400, 'MISSING_FIELD');
     }
@@ -93,6 +149,39 @@ export async function POST(request: NextRequest) {
         400, 
         'INVALID_NETWORK'
       );
+    }
+
+    // Extract API key from header for sandbox check
+    const authHeader = request.headers.get('Authorization');
+    const apiKey = authHeader?.replace('Bearer ', '').trim() || '';
+
+    // 5. SANDBOX MODE CHECK - Return mock response for test keys
+    if (isSandboxKey(apiKey)) {
+      const mockResponse = getSandboxDataResponse({
+        phone_number: normalizedPhone,
+        network: network.toLowerCase(),
+        capacity_gb: Number(capacity_gb)
+      });
+
+      // Log test transaction (fire and forget)
+      logTestTransaction({
+        customer_id: customerId,
+        api_key_id: apiKeyId,
+        service: 'data',
+        endpoint: '/api/v1/data/purchase',
+        request_body: { phone_number: normalizedPhone, network, capacity_gb, reference },
+        response_body: mockResponse,
+        transaction_id: mockResponse.transaction_id,
+        ip_address: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || undefined,
+        user_agent: request.headers.get('user-agent') || undefined
+      }).catch(err => console.error('[Sandbox Log Error]', err));
+
+      return NextResponse.json({
+        success: true,
+        data: mockResponse
+      }, {
+        headers: rateLimitResult.headers
+      });
     }
 
     // Check Datamart API key is configured
@@ -310,8 +399,8 @@ export async function POST(request: NextRequest) {
         }
       );
 
-      // Return success response
-      return successResponse({
+      // Build success response data
+      const responseData = {
         transaction_id: transactionId,
         status: datamartResult.orderStatus === 'completed' ? 'delivered' : 'processing',
         phone_number: normalizedPhone,
@@ -329,7 +418,22 @@ export async function POST(request: NextRequest) {
           : 'Data bundle delivered successfully.',
         reference,
         created_at: new Date().toISOString()
-      }, 201);
+      };
+
+      // Store idempotency response
+      if (idempotency_key) {
+        await completeIdempotency(
+          customerId,
+          idempotency_key,
+          'data',
+          responseData,
+          201,
+          transactionId
+        );
+      }
+
+      // Return success response
+      return successResponse(responseData, 201);
 
     } else {
       // Failed - update transaction
@@ -395,6 +499,43 @@ export async function POST(request: NextRequest) {
         }
       );
 
+      // Check if this is a provider-level issue that needs escalation
+      const errorStr = (datamartData.message || '').toLowerCase();
+      const isProviderIssue = 
+        errorStr.includes('insufficient') ||
+        errorStr.includes('balance') ||
+        errorStr.includes('wallet') ||
+        errorStr.includes('unauthorized') ||
+        errorStr.includes('api key') ||
+        errorStr.includes('suspended') ||
+        errorStr.includes('timeout') ||
+        errorStr.includes('unavailable');
+
+      if (isProviderIssue) {
+        // Map and handle as provider error - this will escalate
+        const providerError = mapDataMartError({ message: datamartData.message });
+
+        await handleProviderError(
+          {
+            service: 'data',
+            provider: 'datamart',
+            customer_id: customerId,
+            transaction_id: transactionId,
+            request: { phone_number: normalizedPhone, network, capacity_gb },
+            error: datamartData
+          },
+          providerError
+        );
+
+        // Return generic message to customer
+        return errorResponse(
+          'Data purchase failed. Please try again in a few minutes.',
+          503,
+          'PURCHASE_FAILED'
+        );
+      }
+
+      // Non-provider error - safe to show to customer
       return errorResponse(
         datamartData.message || 'Data purchase failed',
         400,
@@ -405,11 +546,38 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Data purchase error:', error);
-    return errorResponse(
-      'Internal server error',
-      500,
-      'INTERNAL_ERROR'
+
+    // Handle customer errors (safe to show to user)
+    if (isCustomerError(error)) {
+      return errorResponse(
+        error.message,
+        error.httpStatus,
+        error.code,
+        error.details
+      );
+    }
+
+    // Handle provider errors
+    let providerError: ProviderError;
+    if (error instanceof ProviderError) {
+      providerError = error;
+    } else {
+      providerError = mapDataMartError(error);
+    }
+
+    // Handle the provider error (logs, escalates, returns sanitized message)
+    const { customerMessage, customerCode, httpStatus } = await handleProviderError(
+      {
+        service: 'data',
+        provider: 'datamart',
+        customer_id: 'unknown',
+        request: {},
+        error
+      },
+      providerError
     );
+
+    return errorResponse(customerMessage, httpStatus, customerCode);
   }
 }
 

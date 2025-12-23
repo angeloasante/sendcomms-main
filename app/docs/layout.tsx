@@ -43,28 +43,9 @@ export default function DocsLayout({
             </Link>
             <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-[#1c1e21] text-gray-400 border border-white/5">v1.0.0</span>
           </div>
-
-          <nav className="hidden md:flex items-center gap-1">
-            <Link href="/docs" className={`px-4 py-1.5 text-sm font-medium transition-colors ${pathname === '/docs' ? 'text-blue-400 bg-[#151b28] rounded-full border border-blue-500/10' : 'text-gray-400 hover:text-white'}`}>Guides</Link>
-            <Link href="/docs/api/email" className={`px-4 py-1.5 text-sm font-medium transition-colors ${isEmailSection ? 'text-blue-400 bg-[#151b28] rounded-full border border-blue-500/10' : 'text-gray-400 hover:text-white'}`}>API Reference</Link>
-            <Link href="/docs/sdks" className="px-4 py-1.5 text-sm font-medium text-gray-400 hover:text-white transition-colors">SDKs</Link>
-            <Link href="/pricing" className="px-4 py-1.5 text-sm font-medium text-gray-400 hover:text-white transition-colors">Pricing</Link>
-          </nav>
         </div>
 
-        <div className="flex items-center gap-4">
-          <div className="relative hidden lg:block group">
-            <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <input type="text" placeholder="Search docs..." className="bg-[#16181b] border border-white/5 text-sm rounded-lg pl-9 pr-12 py-1.5 w-64 text-gray-300 focus:outline-none focus:border-white/20 focus:ring-1 focus:ring-white/20 transition-all placeholder:text-gray-600" />
-            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1">
-              <kbd className="hidden sm:inline-flex h-5 items-center gap-1 rounded border border-gray-700 bg-gray-800 px-1.5 font-mono text-[10px] font-medium text-gray-400">
-                <span className="text-xs">⌘</span>K
-              </kbd>
-            </div>
-          </div>
-          
+        <div className="flex items-center gap-2">
           <Link href="/dashboard" className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold py-2 px-4 rounded-lg transition-colors">
             Dashboard
           </Link>
@@ -75,10 +56,6 @@ export default function DocsLayout({
         {/* Left Sidebar */}
         <aside className="w-[280px] bg-[#0b0c0e] border-r border-white/5 h-[calc(100vh-64px)] sticky top-16 hidden md:flex flex-col overflow-hidden">
           <div className="p-4 border-b border-white/5">
-            <div className="relative">
-              <input type="text" placeholder="Jump to..." className="w-full bg-[#16181b] border border-white/5 rounded-md px-3 py-2 text-xs text-gray-300 focus:outline-none focus:border-blue-500/50" />
-              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-gray-500">⌘ K</span>
-            </div>
           </div>
 
           <nav className="flex-1 overflow-y-auto p-4 space-y-1">

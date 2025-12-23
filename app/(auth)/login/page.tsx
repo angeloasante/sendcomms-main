@@ -102,10 +102,10 @@ export default function LoginPage() {
               &ldquo;SendComms has transformed how we communicate with customers across Africa. One API for SMS, email, airtime, and data - it&apos;s exactly what we needed.&rdquo;
             </p>
             <div className="mt-8 flex items-center gap-4">
-              <div className="h-10 w-10 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs text-zinc-400 font-medium">AK</div>
+              <div className="h-10 w-10 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs text-zinc-400 font-medium">AA</div>
               <div>
-                <p className="text-sm font-medium text-white">Amara Kofi</p>
-                <p className="text-xs text-zinc-500">CTO, TechAfrica Inc.</p>
+                <p className="text-sm font-medium text-white">Angelo Asante</p>
+                <p className="text-xs text-zinc-500">CEO, Diaspora AI Ltd.</p>
               </div>
             </div>
           </div>
@@ -113,7 +113,7 @@ export default function LoginPage() {
           {/* Footer Meta */}
           <div className="relative z-10 flex justify-between items-end text-xs text-zinc-600 font-medium uppercase tracking-widest">
             <span>API Status: Operational</span>
-            <span>© 2024 SendComms</span>
+            <span>© 2025 SendComms</span>
           </div>
         </div>
 
@@ -265,7 +265,7 @@ export default function LoginPage() {
             <p className="text-center text-xs text-zinc-500 pt-4">
               Don&apos;t have an account?{' '}
               <Link href="/signup" className="font-medium text-white hover:underline decoration-zinc-500 underline-offset-4 transition-all">
-                Request access
+                Sign Up
               </Link>
             </p>
 

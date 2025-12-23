@@ -28,7 +28,7 @@ export async function GET() {
     // Get API keys
     const { data: keys, error: keysError } = await supabaseAdmin
       .from('api_keys')
-      .select('id, name, key_preview, permissions, is_active, created_at, last_used_at')
+      .select('id, name, key_preview, permissions, is_active, is_test, created_at, last_used_at')
       .eq('customer_id', customer.id)
       .order('created_at', { ascending: false });
 
@@ -69,15 +69,16 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { name } = body;
+    const { name, is_test } = body;
 
     if (!name?.trim()) {
       return NextResponse.json({ error: 'Key name is required' }, { status: 400 });
     }
 
-    // Generate API key
+    // Generate API key based on type
     const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-    let apiKey = 'sc_live_';
+    const prefix = is_test ? 'sc_test_' : 'sc_live_';
+    let apiKey = prefix;
     for (let i = 0; i < 48; i++) {
       apiKey += chars.charAt(Math.floor(Math.random() * chars.length));
     }
@@ -93,8 +94,9 @@ export async function POST(request: Request) {
         name: name.trim(),
         permissions: ['email', 'sms', 'airtime', 'data'],
         is_active: true,
+        is_test: !!is_test,
       })
-      .select('id, name, key_preview, permissions, is_active, created_at, last_used_at')
+      .select('id, name, key_preview, permissions, is_active, is_test, created_at, last_used_at')
       .single();
 
     if (createError) {
