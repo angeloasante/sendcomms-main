@@ -9,6 +9,7 @@ import {
   sendWebhook,
   generateTransactionId,
   errorResponse,
+  trackSubscriptionUsage,
 } from '@/lib/api-helpers';
 import {
   sendSMS,
@@ -341,8 +342,26 @@ export async function POST(request: NextRequest) {
     }
 
     // 12. Deduct balance if successful
+    let remainingSms = 0;
     if (result.success) {
       await deductBalance(keyData.customer_id, price);
+      
+      // 12b. Track subscription usage for billing
+      await trackSubscriptionUsage(keyData.customer_id, 'sms', 1);
+      
+      // 12c. Get remaining quota
+      const { data: sub } = await getSupabase()
+        .from('subscriptions')
+        .select('sms_used, pricing_plans(sms_limit)')
+        .eq('customer_id', keyData.customer_id)
+        .single();
+      
+      if (sub) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const plans = sub.pricing_plans as any;
+        const limit = plans?.sms_limit || 50;
+        remainingSms = Math.max(0, limit - (sub.sms_used || 0));
+      }
     }
 
     // 13. Send webhook notification (async)
@@ -441,15 +460,16 @@ export async function POST(request: NextRequest) {
       to: formattedPhone,
       message_length: message.length,
       segments,
-      price: {
-        amount: price,
-        currency: 'USD',
-      },
       country: {
         code: countryCode,
         name: countryName,
       },
       region: detectedContinent,
+      remaining: remainingSms,
+      quota: {
+        used: 1,
+        remaining: remainingSms,
+      },
       created_at: now,
     };
 

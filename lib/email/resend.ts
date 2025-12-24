@@ -58,7 +58,7 @@ export async function sendEmail(params: SendEmailParams): Promise<EmailResult> {
       subject,
       html,
       text,
-      from = 'SendComms <onboarding@resend.dev>',
+      from = 'SendComms <info@sendcomms.com>',
       replyTo,
       cc,
       bcc,

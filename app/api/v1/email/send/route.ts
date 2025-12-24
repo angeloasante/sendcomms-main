@@ -10,7 +10,8 @@ import {
   generateTransactionId,
   isValidEmail,
   PRICING,
-  errorResponse
+  errorResponse,
+  trackSubscriptionUsage
 } from '@/lib/api-helpers';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { detectRegion } from '@/lib/region-detection';
@@ -354,8 +355,27 @@ export async function POST(request: NextRequest) {
     }
 
     // 12. Deduct balance if successful
+    let remainingEmails = 0;
     if (result.success) {
       await deductBalance(keyData.customer_id, price);
+      
+      // 12b. Track subscription usage for billing (count each recipient)
+      await trackSubscriptionUsage(keyData.customer_id, 'email', recipientCount);
+      
+      // 12c. Get remaining quota
+      const db = getSupabase();
+      const { data: sub } = await db
+        .from('subscriptions')
+        .select('email_used, pricing_plans(email_limit)')
+        .eq('customer_id', keyData.customer_id)
+        .single();
+      
+      if (sub) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const plans = sub.pricing_plans as any;
+        const limit = plans?.email_limit || 500;
+        remainingEmails = Math.max(0, limit - (sub.email_used || 0));
+      }
     }
 
     // 13. Send webhook notification (async - don't wait)
@@ -448,8 +468,11 @@ export async function POST(request: NextRequest) {
       email_id: result.id,
       status: 'sent',
       recipients: recipientCount,
-      cost: price,
-      currency: 'USD'
+      remaining: remainingEmails,
+      quota: {
+        used: recipientCount,
+        remaining: remainingEmails
+      }
     };
 
     // Store idempotency response in Redis

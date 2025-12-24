@@ -6,7 +6,8 @@ import {
   sendWebhooksForEvent,
   successResponse,
   errorResponse,
-  logUsage
+  logUsage,
+  trackSubscriptionUsage
 } from '@/lib/api-helpers';
 import { withRateLimit } from '@/lib/rate-limit/middleware';
 import { 
@@ -337,6 +338,9 @@ export async function POST(request: NextRequest) {
 
       // Log API usage
       await logUsage(customerId, apiKeyId, '/api/v1/data/purchase', 'POST');
+      
+      // Track subscription usage for billing (data in MB = capacity_gb * 1024)
+      await trackSubscriptionUsage(customerId, 'data', 1, Number(capacity_gb) * 1024);
 
       // 8. Log to data_logs table for dashboard tracking
       try {

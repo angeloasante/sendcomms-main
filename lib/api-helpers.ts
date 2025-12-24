@@ -488,3 +488,89 @@ export async function sendWebhooksForEvent(
   
   return { sent, failed };
 }
+
+// Track subscription usage for billing
+export type UsageType = 'sms' | 'email' | 'data' | 'airtime';
+
+export async function trackSubscriptionUsage(
+  customerId: string,
+  usageType: UsageType,
+  amount: number = 1,
+  dataMb?: number // Optional: for data usage tracking in MB
+): Promise<void> {
+  const supabase = getSupabaseAdmin();
+  
+  try {
+    // First, get or create subscription for the customer
+    const { data: subscription, error: subError } = await supabase
+      .from('subscriptions')
+      .select('id, sms_used, email_used, data_used_mb, airtime_used_ghs')
+      .eq('customer_id', customerId)
+      .single();
+    
+    if (subError || !subscription) {
+      // No subscription exists - get the free plan and create one
+      const { data: freePlan } = await supabase
+        .from('pricing_plans')
+        .select('id')
+        .eq('name', 'free')
+        .single();
+      
+      if (freePlan) {
+        // Create subscription with free plan
+        const { data: newSub, error: createError } = await supabase
+          .from('subscriptions')
+          .insert({
+            customer_id: customerId,
+            plan_id: freePlan.id,
+            status: 'active',
+            current_period_start: new Date().toISOString(),
+            current_period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+            sms_used: usageType === 'sms' ? amount : 0,
+            email_used: usageType === 'email' ? amount : 0,
+            data_used_mb: usageType === 'data' && dataMb ? dataMb : 0,
+            airtime_used_ghs: usageType === 'airtime' ? amount : 0
+          })
+          .select('id')
+          .single();
+        
+        if (createError) {
+          console.error('Failed to create subscription:', createError);
+        }
+        return;
+      }
+      return;
+    }
+    
+    // Update existing subscription usage
+    const updateData: Record<string, number> = {};
+    
+    switch (usageType) {
+      case 'sms':
+        updateData.sms_used = (subscription.sms_used || 0) + amount;
+        break;
+      case 'email':
+        updateData.email_used = (subscription.email_used || 0) + amount;
+        break;
+      case 'data':
+        // Data is tracked in MB
+        const mbToAdd = dataMb || (amount * 1024); // If dataMb not provided, assume amount is GB
+        updateData.data_used_mb = (subscription.data_used_mb || 0) + mbToAdd;
+        break;
+      case 'airtime':
+        updateData.airtime_used_ghs = (subscription.airtime_used_ghs || 0) + amount;
+        break;
+    }
+    
+    const { error: updateError } = await supabase
+      .from('subscriptions')
+      .update(updateData)
+      .eq('id', subscription.id);
+    
+    if (updateError) {
+      console.error('Failed to update subscription usage:', updateError);
+    }
+  } catch (error) {
+    console.error('Error tracking subscription usage:', error);
+  }
+}

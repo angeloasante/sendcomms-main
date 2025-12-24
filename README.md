@@ -13,6 +13,8 @@
   <img src="https://img.shields.io/badge/Email%20API-✓%20Live-brightgreen" alt="Email API" />
   <img src="https://img.shields.io/badge/SMS%20API-✓%20Live-brightgreen" alt="SMS API" />
   <img src="https://img.shields.io/badge/Data%20API-✓%20Live-brightgreen" alt="Data API" />
+  <img src="https://img.shields.io/badge/Billing%20API-✓%20Live-brightgreen" alt="Billing API" />
+  <img src="https://img.shields.io/badge/Stripe%20Payments-✓%20Integrated-blueviolet" alt="Stripe Payments" />
   <img src="https://img.shields.io/badge/Sandbox%20Mode-✓%20Available-blue" alt="Sandbox Mode" />
   <img src="https://img.shields.io/badge/Airtime%20API-Coming%20Soon-yellow" alt="Airtime API" />
 </p>
@@ -259,6 +261,22 @@ Authorization: Bearer YOUR_API_KEY
 - ✅ Rotate keys periodically
 - ✅ Use test keys during development
 
+### Security Verification
+
+SendComms includes a security test suite (`/api/test-security`) that verifies:
+
+| Test | Description |
+|------|-------------|
+| **Webhook Signatures** | Stripe webhooks reject invalid/missing signatures |
+| **Rate Limiting** | API enforces rate limits with proper headers |
+| **Sandbox Isolation** | Test keys isolated from live environment |
+| **API Key Scoping** | Keys restricted to their customer's data |
+
+Run security tests:
+```bash
+curl -X POST "https://api.sendcomms.com/api/test-security?test=all" | jq .
+```
+
 ---
 
 ## 🧪 Sandbox Mode
@@ -417,17 +435,80 @@ if (signature === expectedSignature) {
 | 10,001 - 100,000 | $0.00045 |
 | 100,001+ | Custom |
 
+### Subscription Plans
+
+| Plan | Monthly | SMS/mo | Emails/mo | Data | Airtime (GHS) |
+|------|---------|--------|-----------|------|---------------|
+| **Free** | $0 | 50 | 500 | 1GB | 10 |
+| **Starter** | $29 | 300 | 2,000 | 5GB | 30 |
+| **Pro** | $99 | 1,500 | 10,000 | 30GB | 150 |
+| **Business** | $299 | 6,000 | 40,000 | 150GB | 600 |
+| **Enterprise** | Custom | Unlimited | Unlimited | Unlimited | Custom |
+
 ### Data Bundles
 
 Prices vary by operator and package. Check the dashboard for current rates.
 
 ### Rate Limits
 
-| Plan | Per Minute | Per Hour | Per Day |
-|------|------------|----------|---------|
-| Free | 60 | 500 | 1,000 |
-| Pro | 200 | 5,000 | 50,000 |
-| Enterprise | 1,000 | 20,000 | 200,000 |
+| Plan | Per Minute | Per Hour | Per Day | Per Month |
+|------|------------|----------|---------|-----------|
+| Free | 10 | 100 | 1,000 | 10,000 |
+| Starter | 100 | 1,000 | 10,000 | 100,000 |
+| Pro | 500 | 5,000 | 50,000 | 500,000 |
+| Business | 1,000 | 10,000 | 100,000 | 1,000,000 |
+| Enterprise | 10,000 | 100,000 | 1,000,000 | 10,000,000 |
+
+---
+
+## 💳 Billing & Payments
+
+SendComms uses Stripe for secure subscription billing with the following features:
+
+### Billing Features
+
+- **Stripe Integration**: Secure, PCI-compliant payment processing
+- **Multiple Plans**: Free, Starter, Pro, Business, and Enterprise tiers
+- **Monthly & Annual Billing**: ~20% savings on annual subscriptions
+- **Real-time Usage Tracking**: Live usage updates via Supabase Realtime
+- **Automated Invoicing**: PDF invoices generated automatically
+- **Billing Notifications**: Email alerts for payments, failures, and renewals
+
+### Billing API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/v1/billing/plans` | GET | List all available pricing plans |
+| `/v1/billing/subscription` | GET | Get current subscription details |
+| `/v1/billing/checkout` | POST | Create Stripe Checkout session |
+| `/v1/billing/invoices` | GET | List customer invoices |
+| `/v1/billing/payment-methods` | GET | List saved payment methods |
+| `/v1/dashboard/billing` | GET | Get billing dashboard data |
+
+### Upgrade Flow
+
+```
+User Dashboard → Select Plan → Stripe Checkout → Webhook → Subscription Active
+```
+
+1. User visits `/dashboard/billing/upgrade`
+2. Selects plan and billing cycle (monthly/annual)
+3. Redirected to Stripe Checkout
+4. After payment, webhook updates subscription
+5. Dashboard reflects new plan in real-time
+
+### Billing Webhooks (Stripe)
+
+The platform handles these Stripe webhook events:
+
+| Event | Action |
+|-------|--------|
+| `checkout.session.completed` | Create/update subscription |
+| `customer.subscription.updated` | Sync subscription changes |
+| `customer.subscription.deleted` | Handle cancellation |
+| `invoice.paid` | Send payment success email |
+| `invoice.payment_failed` | Send failure notification |
+| `customer.subscription.trial_will_end` | Send trial ending reminder |
 
 ---
 
@@ -476,6 +557,12 @@ Prices vary by operator and package. Check the dashboard for current rates.
 | `/v1/data/purchase` | POST | Purchase data bundle |
 | `/v1/data/operators` | GET | List available operators |
 | `/v1/data/packages` | GET | List data packages |
+| `/v1/billing/plans` | GET | List pricing plans |
+| `/v1/billing/subscription` | GET | Get subscription details |
+| `/v1/billing/checkout` | POST | Create checkout session |
+| `/v1/billing/invoices` | GET | List customer invoices |
+| `/v1/billing/payment-methods` | GET | List payment methods |
+| `/v1/dashboard/billing` | GET | Get billing dashboard data |
 | `/v1/webhooks` | POST | Register webhook |
 | `/v1/webhooks` | GET | List webhooks |
 | `/v1/webhooks` | DELETE | Delete webhook |
@@ -502,7 +589,11 @@ Prices vary by operator and package. Check the dashboard for current rates.
 - **Database**: Supabase (PostgreSQL)
 - **Caching**: Upstash Redis
 - **Auth**: Supabase Auth
+- **Payments**: Stripe (subscriptions & billing)
+- **Email**: Resend (transactional & billing emails)
+- **SMS**: Twilio + Termii (multi-provider routing)
 - **Styling**: Tailwind CSS
+- **Real-time**: Supabase Realtime (live usage updates)
 
 ---
 
@@ -541,7 +632,9 @@ npm run dev
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key |
 | `UPSTASH_REDIS_REST_URL` | Upstash Redis URL |
 | `UPSTASH_REDIS_REST_TOKEN` | Upstash Redis token |
-| `BREVO_API_KEY` | Brevo API key |
+| `RESEND_API_KEY` | Resend API key (email) |
+| `STRIPE_SECRET_KEY` | Stripe secret key |
+| `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret |
 | `RELOADLY_CLIENT_ID` | Reloadly client ID |
 | `RELOADLY_CLIENT_SECRET` | Reloadly client secret |
 | `TWILIO_ACCOUNT_SID` | Twilio account SID |
@@ -574,19 +667,35 @@ sendcomms/
 │   │   │   ├── stats/       # SMS statistics
 │   │   │   └── pricing/     # SMS pricing
 │   │   ├── data/            # Data bundle endpoints
+│   │   ├── billing/         # Billing API
+│   │   │   ├── plans/       # List pricing plans
+│   │   │   ├── subscription/# Subscription management
+│   │   │   ├── checkout/    # Stripe checkout
+│   │   │   ├── invoices/    # Invoice history
+│   │   │   └── payment-methods/ # Payment methods
+│   │   ├── dashboard/       # Dashboard API
+│   │   │   └── billing/     # Billing dashboard data
 │   │   ├── keys/            # API key management
 │   │   └── webhooks/        # Webhook management
+│   ├── api/webhooks/        # Inbound webhooks
+│   │   └── stripe/          # Stripe webhook handler
+│   ├── api/test-security/   # Security test endpoint
 │   ├── dashboard/           # User dashboard
 │   │   ├── sms/             # SMS dashboard
 │   │   ├── emails/          # Email dashboard
 │   │   ├── data/            # Data dashboard
 │   │   ├── api-keys/        # API keys page
 │   │   └── billing/         # Billing page
+│   │       └── upgrade/     # Plan upgrade page
 │   ├── docs/                # API documentation
 │   └── (auth)/              # Auth pages
 ├── lib/                     # Shared utilities
 │   ├── supabase/            # Database client
 │   ├── email/               # Email provider
+│   │   ├── resend.ts        # Resend integration
+│   │   ├── billing-notifications.ts # Billing emails
+│   │   └── templates/       # Email templates
+│   │       └── billing.tsx  # Billing email templates
 │   ├── sms/                 # SMS providers
 │   │   ├── router.ts        # Provider routing
 │   │   ├── twilio.ts        # Twilio integration
@@ -597,7 +706,14 @@ sendcomms/
 │   └── idempotency/         # Idempotency keys
 ├── components/              # React components
 ├── docs/                    # Internal documentation
+│   ├── BILLING_SYSTEM.md    # Billing system docs
+│   ├── STRIPE_BILLING.md    # Stripe integration
+│   ├── PRICING_ANALYSIS.md  # Pricing configuration
+│   └── SECURITY_TESTS.md    # Security test docs
 └── migrations/              # Database migrations
+    ├── 010_billing_system.sql    # Billing tables
+    ├── 011_stripe_integration.sql # Stripe fields
+    └── 012_billing_tracking.sql   # Billing events
 ```
 
 ---

@@ -96,7 +96,7 @@ export const TransactionReceipt = ({
           </Section>
           
           <Text style={textSmall}>
-            This receipt was automatically generated. For questions, contact support@sendcomms.com
+            This receipt was automatically generated. For questions, contact info@sendcomms.com
           </Text>
           
           <Section style={footer}>
