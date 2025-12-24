@@ -187,6 +187,28 @@ export async function POST(req: NextRequest) {
     }
 
     // Create Stripe Checkout Session
+    // Determine the correct base URL for redirects
+    const getBaseUrl = () => {
+      // 1. Check for explicit env var (recommended for production)
+      if (process.env.NEXT_PUBLIC_APP_URL) {
+        return process.env.NEXT_PUBLIC_APP_URL;
+      }
+      // 2. Use Vercel's automatic URL detection
+      if (process.env.VERCEL_URL) {
+        return `https://${process.env.VERCEL_URL}`;
+      }
+      // 3. Fallback to request origin (works for both local and deployed)
+      return req.nextUrl.origin;
+    };
+    
+    const baseUrl = getBaseUrl();
+    const successUrl = process.env.STRIPE_SUCCESS_URL?.startsWith('http') 
+      ? process.env.STRIPE_SUCCESS_URL 
+      : `${baseUrl}/dashboard/billing?session_id={CHECKOUT_SESSION_ID}`;
+    const cancelUrl = process.env.STRIPE_CANCEL_URL?.startsWith('http')
+      ? process.env.STRIPE_CANCEL_URL
+      : `${baseUrl}/dashboard/billing/upgrade?plan=${plan}`;
+
     const session = await stripe.checkout.sessions.create({
       customer: stripeCustomerId,
       mode: 'subscription',
@@ -197,8 +219,8 @@ export async function POST(req: NextRequest) {
           quantity: 1,
         },
       ],
-      success_url: process.env.STRIPE_SUCCESS_URL || `${req.nextUrl.origin}/dashboard/billing?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: process.env.STRIPE_CANCEL_URL || `${req.nextUrl.origin}/dashboard/billing/upgrade?plan=${plan}`,
+      success_url: successUrl,
+      cancel_url: cancelUrl,
       metadata: {
         customer_id: customer.id,
         plan,
