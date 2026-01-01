@@ -29,7 +29,7 @@ export async function sendTermii(
     const senderId = from || process.env.TERMII_SENDER_ID || 'SendComms';
 
     if (!apiKey || apiKey === 'your_termii_api_key') {
-      throw new Error('Termii API key not configured');
+      throw new Error('Africa SMS server temporarily unavailable. Please try again later or contact support@sendcomms.com');
     }
 
     // Remove + prefix if present (Termii expects number without +)
