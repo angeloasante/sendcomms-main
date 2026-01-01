@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 
+// Simple in-memory cache for customer data (cleared on server restart)
+const customerCache = new Map<string, { data: unknown; timestamp: number }>();
+const CACHE_TTL = 30 * 1000; // 30 seconds
+
 export async function GET() {
   try {
     const supabase = await createClient();
@@ -11,6 +15,12 @@ export async function GET() {
     
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Check cache first
+    const cached = customerCache.get(user.id);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      return NextResponse.json(cached.data);
     }
 
     // First, try to get customer by auth_user_id
@@ -89,13 +99,18 @@ export async function GET() {
       return NextResponse.json({ error: 'Account is inactive' }, { status: 403 });
     }
 
-    return NextResponse.json({
+    const responseData = {
       id: customer.id,
       email: customer.email,
       name: customer.name,
       plan: customer.plan,
       balance: customer.balance,
-    });
+    };
+
+    // Cache the result
+    customerCache.set(user.id, { data: responseData, timestamp: Date.now() });
+
+    return NextResponse.json(responseData);
   } catch (error) {
     console.error('Customer API error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

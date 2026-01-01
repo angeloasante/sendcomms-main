@@ -192,8 +192,8 @@ export async function POST(request: NextRequest) {
     // 9. Log usage
     await logUsage(keyData.customer_id, keyData.id, '/api/v1/email/batch', 'POST');
 
-    // 10. Send batch via Resend
-    const result = await sendBatchEmails(validatedEmails);
+    // 10. Send batch via Resend (pass customerId for domain lookup)
+    const result = await sendBatchEmails(validatedEmails, keyData.customer_id);
 
     // 11. Update transaction
     const status = result.success ? 'sent' : 'failed';
@@ -202,7 +202,10 @@ export async function POST(request: NextRequest) {
       .from('transactions')
       .update({
         status,
-        response_data: result,
+        response_data: {
+          ...result,
+          from_address: result.fromAddress
+        },
         sent_at: result.success ? new Date().toISOString() : null,
         completed_at: new Date().toISOString(),
         processing_time_ms: Date.now() - startTime

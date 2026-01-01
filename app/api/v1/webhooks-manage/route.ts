@@ -14,22 +14,14 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get customer
-    const { data: customer, error: customerError } = await supabaseAdmin
-      .from('customers')
-      .select('id')
-      .eq('auth_user_id', user.id)
-      .single();
-
-    if (customerError || !customer) {
-      return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
-    }
-
-    // Get webhooks
+    // Get webhooks in a single query using a join (optimized - no separate customer query)
     const { data: webhooks, error: webhooksError } = await supabaseAdmin
       .from('customer_webhooks')
-      .select('id, url, events, is_active, created_at')
-      .eq('customer_id', customer.id)
+      .select(`
+        id, url, events, is_active, created_at,
+        customers!inner(auth_user_id)
+      `)
+      .eq('customers.auth_user_id', user.id)
       .order('created_at', { ascending: false });
 
     if (webhooksError) {
@@ -37,7 +29,10 @@ export async function GET() {
       return NextResponse.json({ error: 'Failed to fetch webhooks' }, { status: 500 });
     }
 
-    return NextResponse.json(webhooks || []);
+    // Remove the customers join data from response
+    const cleanedWebhooks = (webhooks || []).map(({ customers, ...webhook }) => webhook);
+
+    return NextResponse.json(cleanedWebhooks);
   } catch (error) {
     console.error('Webhooks GET error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

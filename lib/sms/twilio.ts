@@ -30,6 +30,8 @@ function getTwilioClient() {
 
 /**
  * Send SMS via Twilio
+ * Uses Messaging Service SID for intelligent sender selection when no 'from' is provided.
+ * The Messaging Service automatically selects the best sender from the pool (e.g., "Sendcomms").
  */
 export async function sendTwilio(
   to: string,
@@ -38,21 +40,38 @@ export async function sendTwilio(
 ): Promise<TwilioSendResult> {
   try {
     const client = getTwilioClient();
-    const fromNumber = from || process.env.TWILIO_NUMBER;
-
-    if (!fromNumber) {
-      throw new Error('Twilio phone number not configured');
-    }
-
+    const messagingServiceSid = process.env.TWILIO_MESSAGING_SERVICE_SID;
+    
     // Ensure phone number has + prefix
     const formattedTo = to.startsWith('+') ? to : `+${to}`;
-    const formattedFrom = fromNumber.startsWith('+') ? fromNumber : `+${fromNumber}`;
 
-    const twilioMessage = await client.messages.create({
+    // Build message options
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const messageOptions: any = {
       body: message,
       to: formattedTo,
-      from: formattedFrom.trim(),
-    });
+    };
+
+    // If a specific 'from' number is provided, use it directly
+    // Otherwise, use Messaging Service SID for intelligent sender selection
+    if (from) {
+      const formattedFrom = from.startsWith('+') ? from : `+${from}`;
+      messageOptions.from = formattedFrom.trim();
+    } else if (messagingServiceSid) {
+      // Use Messaging Service - automatically selects best sender from pool
+      // This allows "Sendcomms" alphanumeric sender ID to be used automatically
+      messageOptions.messagingServiceSid = messagingServiceSid;
+    } else {
+      // Fallback to default Twilio number
+      const fromNumber = process.env.TWILIO_NUMBER;
+      if (!fromNumber) {
+        throw new Error('Twilio phone number or Messaging Service not configured');
+      }
+      const formattedFrom = fromNumber.startsWith('+') ? fromNumber : `+${fromNumber}`;
+      messageOptions.from = formattedFrom.trim();
+    }
+
+    const twilioMessage = await client.messages.create(messageOptions);
 
     // Calculate number of segments (SMS are 160 chars, or 70 for unicode)
     const hasUnicode = /[^\x00-\x7F]/.test(message);

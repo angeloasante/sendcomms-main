@@ -438,12 +438,37 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      // Non-provider error (e.g., invalid number) - safe to show to customer
+      // Non-provider error - map to user-friendly message
+      // Check if it's a Twilio error that needs mapping (e.g., invalid from number)
+      let userMessage = result.error || 'Failed to send SMS';
+      
+      if (result.provider === 'twilio') {
+        // Map common Twilio error codes to user-friendly messages
+        if (result.error?.includes('is not a Twilio phone number') || result.error?.includes('21659')) {
+          userMessage = 'The "from" number is not a verified SendComms sender. Remove the "from" parameter to use the default sender, add a verified number in your dashboard, or contact support@sendcomms.com for assistance.';
+        } else if (result.error?.includes('not verified') || result.error?.includes('21608')) {
+          userMessage = 'The "from" number is not verified. Please add and verify this number in your SendComms dashboard or contact support@sendcomms.com.';
+        } else if (result.error?.includes('21211')) {
+          userMessage = 'Invalid "from" phone number format. Please use E.164 format (e.g., +1234567890) or remove the "from" parameter to use the default sender.';
+        } else if (result.error?.includes('21215')) {
+          userMessage = 'The "from" number is not enabled for this destination region. Remove the "from" parameter to use the default sender, or contact support@sendcomms.com for assistance.';
+        } else if (result.error?.includes('21614') || result.error?.includes('Invalid \'To\' Phone Number')) {
+          userMessage = 'Invalid destination phone number format. Please use E.164 format (e.g., +1234567890).';
+        } else if (result.error?.includes('21610') || result.error?.includes('opted out')) {
+          userMessage = 'This recipient has opted out of receiving messages from this number.';
+        }
+      } else if (result.provider === 'termii') {
+        // Map Termii errors
+        if (result.error?.includes('sender') || result.error?.includes('not registered')) {
+          userMessage = 'The sender ID is not registered. Please use a verified sender or contact support@sendcomms.com.';
+        }
+      }
+
       return NextResponse.json({
         success: false,
         error: {
           code: 'SMS_SEND_FAILED',
-          message: result.error || 'Failed to send SMS',
+          message: userMessage,
           transaction_id: transactionId,
         },
       }, {

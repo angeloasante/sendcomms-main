@@ -228,12 +228,13 @@ export function mapReloadlyError(error: unknown): ProviderError {
 
 /**
  * Map Twilio (SMS) errors
+ * Reference: https://www.twilio.com/docs/api/errors
  */
 export function mapTwilioError(error: unknown): ProviderError {
   const errorMessage = getErrorMessage(error);
   const code = getErrorCode(error);
   
-  // Account suspended or authentication failed
+  // Account suspended or authentication failed (20003)
   if (code === '20003') {
     return new ProviderError(
       'Twilio account authentication failed',
@@ -244,7 +245,7 @@ export function mapTwilioError(error: unknown): ProviderError {
     );
   }
   
-  // Insufficient funds
+  // Insufficient funds (20429)
   if (
     code === '20429' || 
     errorMessage.includes('balance') ||
@@ -259,7 +260,7 @@ export function mapTwilioError(error: unknown): ProviderError {
     );
   }
   
-  // Rate limit exceeded
+  // Rate limit exceeded (29)
   if (code === '29' || errorMessage.includes('rate limit')) {
     return new ProviderError(
       'Twilio rate limit exceeded',
@@ -285,7 +286,133 @@ export function mapTwilioError(error: unknown): ProviderError {
     );
   }
   
-  // Queue overflow
+  // ============================================
+  // FROM NUMBER / SENDER ID ERRORS
+  // ============================================
+  
+  // Invalid 'From' number - not a Twilio number (21659)
+  if (code === '21659' || errorMessage.includes('is not a Twilio phone number')) {
+    return new ProviderError(
+      'The "from" number is not a verified SendComms sender. Remove the "from" parameter to use the default sender, add a verified number in your dashboard, or contact support@sendcomms.com for assistance.',
+      'twilio',
+      error,
+      'medium',
+      false
+    );
+  }
+  
+  // From number not verified for trial account (21608)
+  if (code === '21608' || errorMessage.includes('not verified')) {
+    return new ProviderError(
+      'The "from" number is not verified. Please add and verify this number in your SendComms dashboard or contact support@sendcomms.com.',
+      'twilio',
+      error,
+      'medium',
+      false
+    );
+  }
+  
+  // Invalid 'From' phone number format (21211)
+  if (code === '21211') {
+    return new ProviderError(
+      'Invalid "from" phone number format. Please use E.164 format (e.g., +1234567890) or remove the "from" parameter to use the default sender.',
+      'twilio',
+      error,
+      'medium',
+      false
+    );
+  }
+  
+  // From number not enabled for region (21215)
+  if (code === '21215') {
+    return new ProviderError(
+      'The "from" number is not enabled for this destination region. Remove the "from" parameter to use the default sender, or contact support@sendcomms.com for assistance.',
+      'twilio',
+      error,
+      'medium',
+      false
+    );
+  }
+  
+  // ============================================
+  // MESSAGING SERVICE ERRORS
+  // ============================================
+  
+  // Messaging Service not found (21703)
+  if (code === '21703') {
+    return new ProviderError(
+      'Messaging Service not found - check configuration',
+      'twilio',
+      error,
+      'critical',
+      false
+    );
+  }
+  
+  // Messaging Service has no phone numbers (21704)
+  if (code === '21704') {
+    return new ProviderError(
+      'Messaging Service has no phone numbers in sender pool',
+      'twilio',
+      error,
+      'critical',
+      false
+    );
+  }
+  
+  // Cannot determine best sender from Messaging Service (21705)
+  if (code === '21705') {
+    return new ProviderError(
+      'Messaging Service cannot determine best sender for destination',
+      'twilio',
+      error,
+      'high',
+      true
+    );
+  }
+  
+  // Alphanumeric sender ID not supported in region (21708)
+  if (code === '21708') {
+    return new ProviderError(
+      'Alphanumeric sender ID not supported in destination region',
+      'twilio',
+      error,
+      'medium',
+      false
+    );
+  }
+  
+  // ============================================
+  // TO NUMBER / DESTINATION ERRORS
+  // ============================================
+  
+  // Invalid 'To' phone number (21211, 21614)
+  if (code === '21614' || (code === '21211' && errorMessage.includes('To'))) {
+    return new ProviderError(
+      'Invalid destination phone number format',
+      'twilio',
+      error,
+      'medium',
+      false
+    );
+  }
+  
+  // To number is on do-not-contact list (21610)
+  if (code === '21610') {
+    return new ProviderError(
+      'Recipient has opted out of receiving messages',
+      'twilio',
+      error,
+      'medium',
+      false
+    );
+  }
+  
+  // ============================================
+  // MESSAGE DELIVERY ERRORS
+  // ============================================
+  
+  // Queue overflow (30001)
   if (code === '30001') {
     return new ProviderError(
       'Twilio queue capacity exceeded',
@@ -296,7 +423,18 @@ export function mapTwilioError(error: unknown): ProviderError {
     );
   }
   
-  // Unreachable destination
+  // Account suspended (30002)
+  if (code === '30002') {
+    return new ProviderError(
+      'Twilio account suspended',
+      'twilio',
+      error,
+      'critical',
+      false
+    );
+  }
+  
+  // Unreachable destination (30003)
   if (code === '30003') {
     return new ProviderError(
       'Twilio: Destination number unreachable',
@@ -307,7 +445,40 @@ export function mapTwilioError(error: unknown): ProviderError {
     );
   }
   
-  // Message blocked
+  // Message blocked by carrier (30004)
+  if (code === '30004') {
+    return new ProviderError(
+      'Twilio: Message blocked by carrier',
+      'twilio',
+      error,
+      'medium',
+      false
+    );
+  }
+  
+  // Unknown destination handset (30005)
+  if (code === '30005') {
+    return new ProviderError(
+      'Twilio: Unknown destination handset',
+      'twilio',
+      error,
+      'medium',
+      false
+    );
+  }
+  
+  // Landline or unreachable carrier (30006)
+  if (code === '30006') {
+    return new ProviderError(
+      'Twilio: Destination is a landline or unreachable',
+      'twilio',
+      error,
+      'medium',
+      false
+    );
+  }
+  
+  // Message blocked / filtered (30007)
   if (code === '30007') {
     return new ProviderError(
       'Twilio: Message blocked by carrier or filtered',
@@ -317,6 +488,21 @@ export function mapTwilioError(error: unknown): ProviderError {
       false
     );
   }
+  
+  // Unknown error (30008)
+  if (code === '30008') {
+    return new ProviderError(
+      'Twilio: Unknown delivery error',
+      'twilio',
+      error,
+      'high',
+      true
+    );
+  }
+  
+  // ============================================
+  // SERVICE AVAILABILITY ERRORS
+  // ============================================
   
   // Service unavailable
   if (
@@ -332,6 +518,10 @@ export function mapTwilioError(error: unknown): ProviderError {
       true
     );
   }
+  
+  // ============================================
+  // GENERIC FALLBACK
+  // ============================================
   
   return new ProviderError(
     `Twilio error [${code}]: ${errorMessage}`,

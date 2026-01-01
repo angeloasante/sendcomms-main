@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
@@ -44,6 +44,7 @@ export default function ApiKeysPage() {
   const [isCreating, setIsCreating] = useState(false);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [customerId, setCustomerId] = useState<string | null>(null);
+  const fetchedRef = useRef(false); // Prevent double fetch in StrictMode
 
   const webhookEvents = [
     { id: 'email.sent', label: 'Email Sent', description: 'When an email is accepted' },
@@ -56,6 +57,10 @@ export default function ApiKeysPage() {
 
   // Check authentication and get customer
   useEffect(() => {
+    // Prevent double fetch in React Strict Mode
+    if (fetchedRef.current) return;
+    fetchedRef.current = true;
+    
     const checkAuth = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       
@@ -86,6 +91,9 @@ export default function ApiKeysPage() {
 
         const customer = await response.json();
         setCustomerId(customer.id);
+        
+        // Fetch keys and webhooks in parallel immediately after getting customer
+        fetchDataParallel();
       } catch (err) {
         console.error('Error fetching customer:', err);
         setError('Unable to load your account. Please try again.');
@@ -94,32 +102,28 @@ export default function ApiKeysPage() {
     };
 
     checkAuth();
-  }, [supabase, router]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // Fetch data when customer is loaded
-  const fetchData = useCallback(async () => {
-    if (!customerId) return;
-
-    setLoading(true);
+  // Fetch API keys and webhooks in parallel
+  const fetchDataParallel = useCallback(async () => {
     setError(null);
 
     try {
-      // Fetch API keys via API
-      const keysResponse = await fetch('/api/v1/keys');
+      // Fetch API keys and webhooks in PARALLEL
+      const [keysResponse, webhooksResponse] = await Promise.all([
+        fetch('/api/v1/keys'),
+        fetch('/api/v1/webhooks-manage')
+      ]);
+
       if (keysResponse.ok) {
         const keys = await keysResponse.json();
         setApiKeys(keys || []);
-      } else {
-        console.error('Error fetching API keys');
       }
 
-      // Fetch webhooks via API
-      const webhooksResponse = await fetch('/api/v1/webhooks-manage');
       if (webhooksResponse.ok) {
         const webhooksData = await webhooksResponse.json();
         setWebhooks(webhooksData || []);
-      } else {
-        console.error('Error fetching webhooks');
       }
     } catch (err) {
       console.error('Error fetching data:', err);
@@ -127,13 +131,14 @@ export default function ApiKeysPage() {
     } finally {
       setLoading(false);
     }
-  }, [customerId]);
+  }, []);
 
-  useEffect(() => {
-    if (customerId) {
-      fetchData();
-    }
-  }, [customerId, fetchData]);
+  // Fetch data when customer is loaded (for manual refresh)
+  const fetchData = useCallback(async () => {
+    if (!customerId) return;
+    setLoading(true);
+    await fetchDataParallel();
+  }, [customerId, fetchDataParallel]);
 
   const handleCreateKey = async () => {
     if (!newKeyName.trim() || !customerId) return;

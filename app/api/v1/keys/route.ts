@@ -14,22 +14,14 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get customer
-    const { data: customer, error: customerError } = await supabaseAdmin
-      .from('customers')
-      .select('id')
-      .eq('auth_user_id', user.id)
-      .single();
-
-    if (customerError || !customer) {
-      return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
-    }
-
-    // Get API keys
+    // Get customer ID and API keys in a single query using a join
     const { data: keys, error: keysError } = await supabaseAdmin
       .from('api_keys')
-      .select('id, name, key_preview, permissions, is_active, is_test, created_at, last_used_at')
-      .eq('customer_id', customer.id)
+      .select(`
+        id, name, key_preview, permissions, is_active, is_test, created_at, last_used_at,
+        customers!inner(auth_user_id)
+      `)
+      .eq('customers.auth_user_id', user.id)
       .order('created_at', { ascending: false });
 
     if (keysError) {
@@ -37,7 +29,10 @@ export async function GET() {
       return NextResponse.json({ error: 'Failed to fetch API keys' }, { status: 500 });
     }
 
-    return NextResponse.json(keys || []);
+    // Remove the customers join data from response
+    const cleanedKeys = (keys || []).map(({ customers, ...key }) => key);
+
+    return NextResponse.json(cleanedKeys);
   } catch (error) {
     console.error('API keys GET error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

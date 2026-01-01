@@ -276,12 +276,13 @@ export async function POST(request: NextRequest) {
     await logUsage(keyData.customer_id, keyData.id, '/api/v1/email/send', 'POST');
 
     // 10. Send email via Resend
+    // Pass customerId to use customer's verified domain if available
     const result = await sendEmail({
       to: recipients,
       subject,
       html,
       text,
-      from: from || 'SendComms <noreply@sendcomms.com>',
+      from, // Pass the provided 'from' - will be validated against customer's domains
       replyTo,
       cc,
       bcc,
@@ -291,7 +292,8 @@ export async function POST(request: NextRequest) {
         { name: 'customer_id', value: keyData.customer_id },
         { name: 'transaction_id', value: transactionId }
       ],
-      headers
+      headers,
+      customerId: keyData.customer_id // Enable domain lookup for this customer
     });
 
     // 11. Update transaction status
@@ -306,7 +308,8 @@ export async function POST(request: NextRequest) {
         response_data: { 
           success: result.success, 
           error: result.error,
-          email_id: result.id
+          email_id: result.id,
+          from_address: result.fromAddress
         },
         sent_at: result.success ? now : null,
         completed_at: status === 'failed' ? now : null,
@@ -315,8 +318,9 @@ export async function POST(request: NextRequest) {
       .eq('id', transactionId);
 
     // 11b. Log to email_logs table for dashboard tracking
-    const fromEmail = from || 'SendComms <noreply@sendcomms.com>';
-    const fromParts = fromEmail.match(/^(.+?)\s*<(.+?)>$/) || [null, null, fromEmail];
+    // Use the actual 'from' address that was used (from result.fromAddress)
+    const actualFromEmail = result.fromAddress || 'SendComms <noreply@sendcomms.com>';
+    const fromParts = actualFromEmail.match(/^(.+?)\s*<(.+?)>$/) || [null, null, actualFromEmail];
     
     // Log each recipient as a separate email entry
     for (const recipient of recipients) {
@@ -326,7 +330,7 @@ export async function POST(request: NextRequest) {
           .insert({
             customer_id: keyData.customer_id,
             message_id: result.id,
-            from_email: fromParts[2] || fromEmail,
+            from_email: fromParts[2] || actualFromEmail,
             from_name: fromParts[1] || null,
             to_email: recipient,
             reply_to: replyTo,

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { sendWebhook, verifyWebhookSignature } from '@/lib/api-helpers';
+import { sendWebhook } from '@/lib/api-helpers';
+import { getDomain } from '@/lib/email/domains';
+import crypto from 'crypto';
 
 // Lazy-initialized Supabase client
 let supabase: SupabaseClient | null = null;
@@ -26,32 +28,205 @@ type ResendEventType =
   | 'email.complained'
   | 'email.bounced'
   | 'email.opened'
-  | 'email.clicked';
+  | 'email.clicked'
+  | 'domain.created'
+  | 'domain.updated'
+  | 'domain.deleted';
+
+interface ResendEmailWebhookData {
+  email_id: string;
+  from: string;
+  to: string[];
+  subject: string;
+  created_at: string;
+  // For bounce events
+  bounce?: {
+    message: string;
+  };
+  // For click events
+  click?: {
+    link: string;
+    timestamp: string;
+  };
+  // For open events
+  open?: {
+    timestamp: string;
+    user_agent: string;
+  };
+}
+
+interface ResendDomainWebhookData {
+  id: string;
+  name: string;
+  status: 'not_started' | 'pending' | 'verified' | 'failed' | 'temporary_failure' | 'partially_failed';
+  created_at: string;
+  region: string;
+}
 
 interface ResendWebhookPayload {
   type: ResendEventType;
   created_at: string;
-  data: {
-    email_id: string;
-    from: string;
-    to: string[];
-    subject: string;
-    created_at: string;
-    // For bounce events
-    bounce?: {
-      message: string;
-    };
-    // For click events
-    click?: {
-      link: string;
-      timestamp: string;
-    };
-    // For open events
-    open?: {
-      timestamp: string;
-      user_agent: string;
-    };
-  };
+  data: ResendEmailWebhookData | ResendDomainWebhookData;
+}
+
+// Helper to check if payload is a domain event
+function isDomainEvent(type: ResendEventType): boolean {
+  return type.startsWith('domain.');
+}
+
+// Handle domain webhook events
+async function handleDomainWebhook(payload: ResendWebhookPayload): Promise<NextResponse> {
+  const domainData = payload.data as ResendDomainWebhookData;
+  
+  console.log(`Domain webhook received: ${payload.type} for domain ${domainData.name} (${domainData.id})`);
+
+  // Find the domain by resend_domain_id
+  const { data: domain, error: domainError } = await getSupabase()
+    .from('customer_domains')
+    .select('*, customers(id, email, name)')
+    .eq('resend_domain_id', domainData.id)
+    .single();
+
+  if (domainError || !domain) {
+    console.log('Domain not found for resend_domain_id:', domainData.id);
+    
+    // Log unknown webhook but don't fail
+    await getSupabase()
+      .from('webhook_logs')
+      .insert({
+        provider: 'resend',
+        event_type: payload.type,
+        payload,
+        processed: false,
+        error: 'Domain not found',
+        received_at: new Date().toISOString()
+      });
+    
+    return NextResponse.json({ received: true });
+  }
+
+  const previousStatus = domain.status;
+  let newStatus = domainData.status;
+
+  // Map 'partially_failed' to 'verified' if sending works (common for domains without receiving)
+  if (newStatus === 'partially_failed') {
+    // Check if it's verified for sending - treat as verified
+    newStatus = 'verified';
+  }
+
+  // Handle based on event type
+  switch (payload.type) {
+    case 'domain.created':
+      // Domain was created via Resend dashboard/API directly
+      // Our DB should already have it if created via our API
+      console.log(`Domain created: ${domainData.name}`);
+      break;
+      
+    case 'domain.updated':
+      // Fetch full domain details from Resend to get updated DNS records
+      const domainDetails = await getDomain(domainData.id);
+      
+      // Status changed - update our database
+      const updateData: Record<string, unknown> = {
+        status: newStatus,
+        updated_at: new Date().toISOString(),
+        last_checked_at: new Date().toISOString()
+      };
+
+      // Update DNS records if we got them from the API
+      if (domainDetails.success && domainDetails.data?.records) {
+        updateData.dns_records = domainDetails.data.records;
+        console.log(`Updated DNS records for ${domainData.name}:`, 
+          domainDetails.data.records.map(r => `${r.record}: ${r.status}`).join(', ')
+        );
+      }
+
+      // If newly verified, set verified_at and enable sending
+      if (newStatus === 'verified' && previousStatus !== 'verified') {
+        updateData.verified_at = new Date().toISOString();
+        updateData.sending_enabled = true;
+      }
+
+      // If failed, disable sending
+      if (newStatus === 'failed') {
+        updateData.sending_enabled = false;
+      }
+
+      await getSupabase()
+        .from('customer_domains')
+        .update(updateData)
+        .eq('id', domain.id);
+
+      // Log the status change
+      await getSupabase()
+        .from('domain_verification_logs')
+        .insert({
+          domain_id: domain.id,
+          customer_id: domain.customer_id,
+          previous_status: previousStatus,
+          new_status: newStatus,
+          triggered_by: 'webhook',
+          spf_status: domainDetails.data?.records?.find(r => r.record === 'SPF')?.status || null,
+          dkim_status: domainDetails.data?.records?.find(r => r.record === 'DKIM')?.status || null,
+          metadata: {
+            webhook_type: payload.type,
+            resend_data: domainData,
+            dns_records: domainDetails.data?.records || null
+          },
+          created_at: new Date().toISOString()
+        });
+
+      console.log(`Domain ${domainData.name} status updated: ${previousStatus} -> ${newStatus}`);
+      break;
+      
+    case 'domain.deleted':
+      // Domain was deleted from Resend - soft delete in our DB
+      await getSupabase()
+        .from('customer_domains')
+        .update({
+          is_active: false,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', domain.id);
+
+      // Log the deletion
+      await getSupabase()
+        .from('domain_verification_logs')
+        .insert({
+          domain_id: domain.id,
+          customer_id: domain.customer_id,
+          previous_status: previousStatus,
+          new_status: 'deleted',
+          triggered_by: 'webhook',
+          metadata: {
+            webhook_type: payload.type,
+            resend_data: domainData
+          },
+          created_at: new Date().toISOString()
+        });
+
+      console.log(`Domain ${domainData.name} marked as deleted`);
+      break;
+  }
+
+  // Log webhook receipt
+  await getSupabase()
+    .from('webhook_logs')
+    .insert({
+      customer_id: domain.customer_id,
+      provider: 'resend',
+      event_type: payload.type,
+      payload,
+      processed: true,
+      received_at: new Date().toISOString()
+    });
+
+  return NextResponse.json({
+    success: true,
+    message: 'Domain webhook processed',
+    domain: domainData.name,
+    status: newStatus
+  });
 }
 
 export async function POST(request: NextRequest) {
@@ -65,25 +240,51 @@ export async function POST(request: NextRequest) {
       const timestamp = request.headers.get('svix-timestamp') || '';
       const webhookId = request.headers.get('svix-id') || '';
       
+      // Check timestamp to prevent replay attacks (5 minutes tolerance)
+      const timestampSeconds = parseInt(timestamp, 10);
+      const now = Math.floor(Date.now() / 1000);
+      if (isNaN(timestampSeconds) || Math.abs(now - timestampSeconds) > 300) {
+        console.error('Webhook timestamp too old or invalid');
+        return NextResponse.json(
+          { error: 'Invalid timestamp' },
+          { status: 401 }
+        );
+      }
+      
       // Resend uses Svix for webhooks - construct signed payload
       const signedPayload = `${webhookId}.${timestamp}.${rawBody}`;
       
-      // Extract signature from header (format: v1,signature)
+      // The webhook secret from Svix starts with "whsec_" - we need to base64 decode the part after it
+      const secretBytes = Buffer.from(RESEND_WEBHOOK_SECRET.replace('whsec_', ''), 'base64');
+      
+      // Extract signatures from header (format: "v1,base64sig v1,base64sig2")
       const signatures = signature.split(' ');
       let isValid = false;
       
       for (const sig of signatures) {
         const [version, sigValue] = sig.split(',');
         if (version === 'v1' && sigValue) {
-          if (verifyWebhookSignature(signedPayload, sigValue, RESEND_WEBHOOK_SECRET)) {
-            isValid = true;
-            break;
+          // Compute expected signature using HMAC-SHA256 with base64 output
+          const expectedSig = crypto
+            .createHmac('sha256', secretBytes)
+            .update(signedPayload)
+            .digest('base64');
+          
+          // Compare signatures
+          try {
+            if (crypto.timingSafeEqual(Buffer.from(sigValue), Buffer.from(expectedSig))) {
+              isValid = true;
+              break;
+            }
+          } catch {
+            // Buffer lengths don't match, continue to next signature
           }
         }
       }
       
       if (!isValid) {
         console.error('Invalid webhook signature');
+        console.error('Headers:', { signature, timestamp, webhookId });
         return NextResponse.json(
           { error: 'Invalid signature' },
           { status: 401 }
@@ -94,9 +295,16 @@ export async function POST(request: NextRequest) {
     // 3. Parse the webhook payload
     const payload: ResendWebhookPayload = JSON.parse(rawBody);
     
-    console.log('Resend webhook received:', payload.type, payload.data.email_id);
+    console.log('Resend webhook received:', payload.type);
 
-    // 4. Find the transaction by provider_id (email_id from Resend)
+    // 4. Route to appropriate handler based on event type
+    if (isDomainEvent(payload.type)) {
+      return await handleDomainWebhook(payload);
+    }
+
+    // 5. Handle email events - Find the transaction by provider_id (email_id from Resend)
+    const emailData = payload.data as ResendEmailWebhookData;
+    
     const { data: transaction, error: txError } = await getSupabase()
       .from('transactions')
       .select(`
@@ -107,12 +315,12 @@ export async function POST(request: NextRequest) {
           webhook_secret
         )
       `)
-      .eq('provider_id', payload.data.email_id)
+      .eq('provider_id', emailData.email_id)
       .single();
 
     if (txError || !transaction) {
       // Log unknown webhook but don't fail - might be from test emails
-      console.log('Transaction not found for email_id:', payload.data.email_id);
+      console.log('Transaction not found for email_id:', emailData.email_id);
       
       await getSupabase()
         .from('webhook_logs')
@@ -128,7 +336,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ received: true });
     }
 
-    // 5. Map Resend event to our status
+    // 6. Map Resend event to our status
     let newStatus: string | null = null;
     let eventType: string = payload.type;
     
@@ -158,13 +366,13 @@ export async function POST(request: NextRequest) {
         break;
     }
 
-    // 6. Update transaction status
+    // 7. Update transaction status
     const updateData: Record<string, unknown> = {
       webhook_data: {
         ...((transaction.webhook_data as Record<string, unknown>) || {}),
         [payload.type]: {
           received_at: new Date().toISOString(),
-          data: payload.data
+          data: emailData
         }
       }
     };
@@ -178,7 +386,7 @@ export async function POST(request: NextRequest) {
       } else if (newStatus === 'bounced' || newStatus === 'complained') {
         updateData.failed_at = new Date().toISOString();
         updateData.completed_at = new Date().toISOString();
-        updateData.failure_reason = payload.data.bounce?.message || payload.type;
+        updateData.failure_reason = emailData.bounce?.message || payload.type;
       }
     }
 
@@ -187,7 +395,7 @@ export async function POST(request: NextRequest) {
       .update(updateData)
       .eq('id', transaction.id);
 
-    // 7. Forward webhook to customer if they have a webhook URL configured
+    // 8. Forward webhook to customer if they have a webhook URL configured
     const customer = transaction.customers as { id: string; webhook_url: string | null; webhook_secret: string | null };
     
     if (customer?.webhook_url) {
@@ -195,23 +403,23 @@ export async function POST(request: NextRequest) {
         event: eventType,
         data: {
           id: transaction.id,
-          email_id: payload.data.email_id,
+          email_id: emailData.email_id,
           type: 'email',
           status: newStatus || transaction.status,
-          to: payload.data.to,
-          subject: payload.data.subject,
-          from: payload.data.from,
+          to: emailData.to,
+          subject: emailData.subject,
+          from: emailData.from,
           // Include event-specific data
           ...(payload.type === 'email.bounced' && {
-            bounce_message: payload.data.bounce?.message
+            bounce_message: emailData.bounce?.message
           }),
           ...(payload.type === 'email.opened' && {
-            opened_at: payload.data.open?.timestamp,
-            user_agent: payload.data.open?.user_agent
+            opened_at: emailData.open?.timestamp,
+            user_agent: emailData.open?.user_agent
           }),
           ...(payload.type === 'email.clicked' && {
-            clicked_link: payload.data.click?.link,
-            clicked_at: payload.data.click?.timestamp
+            clicked_link: emailData.click?.link,
+            clicked_at: emailData.click?.timestamp
           })
         }
       };
@@ -226,7 +434,7 @@ export async function POST(request: NextRequest) {
       ).catch(err => console.error('Customer webhook failed:', err));
     }
 
-    // 8. Log webhook receipt
+    // 9. Log webhook receipt
     await getSupabase()
       .from('webhook_logs')
       .insert({
