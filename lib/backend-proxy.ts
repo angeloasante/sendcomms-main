@@ -39,9 +39,10 @@ export async function proxyToBackend(request: NextRequest): Promise<NextResponse
   if (ip) headers.set('x-forwarded-for', ip);
   headers.set('x-original-path', request.nextUrl.pathname);
   // Providers that sign the callback URL (Twilio) must be verified against the
-  // host they actually posted to, not the backend's internal hostname.
-  headers.set('x-forwarded-host', request.nextUrl.host);
-  headers.set('x-forwarded-proto', request.nextUrl.protocol.replace(':', ''));
+  // host they actually posted to. Railway's edge rewrites x-forwarded-host to its
+  // own hostname, so the public host travels in a header it does not touch.
+  headers.set('x-original-host', request.nextUrl.host);
+  headers.set('x-original-proto', request.nextUrl.protocol.replace(':', ''));
   if (process.env.INTERNAL_PROXY_SECRET) headers.set('x-internal-secret', process.env.INTERNAL_PROXY_SECRET);
 
   // Dashboard calls authenticate with the Supabase cookie session. Forward the
