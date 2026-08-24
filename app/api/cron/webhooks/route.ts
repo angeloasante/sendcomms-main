@@ -1,21 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
+/**
+ * Proxied to the FastAPI backend (see lib/backend-proxy.ts).
+ * Original in-process implementation: _old-api/ (reference only, not built).
+ */
+import { proxyHandlers } from '@/lib/backend-proxy';
 
-export async function GET(request: NextRequest) {
-  try {
-    // TODO: Add authentication for cron job (e.g., verify Vercel cron secret)
-    // TODO: Process pending webhooks, retry failed deliveries, etc.
-    
-    console.log('Cron job executed at:', new Date().toISOString());
-    
-    return NextResponse.json({
-      success: true,
-      message: 'Cron job executed successfully',
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    return NextResponse.json(
-      { error: 'Cron job failed' },
-      { status: 500 }
-    );
-  }
-}
+export const dynamic = 'force-dynamic';
+export const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = proxyHandlers();

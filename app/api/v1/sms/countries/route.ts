@@ -5,4 +5,4 @@
 import { proxyHandlers } from '@/lib/backend-proxy';
 
 export const dynamic = 'force-dynamic';
-export const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = proxyHandlers();
+export const { GET } = proxyHandlers();

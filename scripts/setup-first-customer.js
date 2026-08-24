@@ -1,15 +1,30 @@
 const { createClient } = require('@supabase/supabase-js');
 
+// Load .env.local without requiring a dotenv dependency
+try {
+  require('fs').readFileSync('.env.local', 'utf8').split('\n').forEach((line) => {
+    const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
+    if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^["']|["']$/g, '');
+  });
+} catch {}
+
+if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
+  console.error('Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_KEY (e.g. in .env.local) before running.');
+  process.exit(1);
+}
+
 const supabase = createClient(
-  'https://ckyzmgaqojixjuebcwni.supabase.co',
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNreXptZ2Fxb2ppeGp1ZWJjd25pIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NjM0NDA2OCwiZXhwIjoyMDgxOTIwMDY4fQ.aDr33IW-E4BVqHZ6rm4kmBluoP5GrjbOFApJSQIBaq0'
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_KEY
 );
 
 async function setupFirstCustomer() {
   try {
     // Generate a random API key
     const crypto = require('crypto');
-    const apiKey = 'ac_live_' + crypto.randomBytes(24).toString('hex');
+    const apiKey = 'sc_live_' + crypto.randomBytes(24).toString('hex');
+    // Only the SHA-256 hash is stored; the raw key is printed once below.
+    const apiKeyHash = crypto.createHash('sha256').update(apiKey).digest('hex');
     
     console.log('🚀 Setting up first customer...\n');
 
@@ -51,7 +66,7 @@ async function setupFirstCustomer() {
             console.log('📧 Customer Email:', existingCustomer.email);
             console.log('💰 Balance: $' + existingCustomer.balance);
             console.log('📋 Plan:', existingCustomer.plan);
-            console.log('\n🔑 API Key:', existingKey.key_hash);
+            console.log('\n🔑 An API key already exists (hash only is stored; create a new key in the dashboard if you need the secret).');
             return;
           }
           
@@ -60,7 +75,7 @@ async function setupFirstCustomer() {
             .from('api_keys')
             .insert({
               customer_id: existingCustomer.id,
-              key_hash: apiKey,
+              key_hash: apiKeyHash,
               name: 'Production API Key',
               permissions: ['email', 'sms', 'airtime', 'data'],
               is_active: true
@@ -73,7 +88,7 @@ async function setupFirstCustomer() {
           console.log('\n✅ API key created for existing customer!\n');
           console.log('📧 Customer Email:', existingCustomer.email);
           console.log('💰 Balance: $' + existingCustomer.balance);
-          console.log('\n🔑 API Key:', newKey.key_hash);
+          console.log('\n🔑 API Key (shown once):', apiKey);
           return;
         }
       }
@@ -87,7 +102,7 @@ async function setupFirstCustomer() {
       .from('api_keys')
       .insert({
         customer_id: customer.id,
-        key_hash: apiKey,
+        key_hash: apiKeyHash,
         name: 'Production API Key',
         permissions: ['email', 'sms', 'airtime', 'data'],
         is_active: true

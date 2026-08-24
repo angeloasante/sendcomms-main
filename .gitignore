@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+.env*.local
+
+# Old in-process API, kept locally as reference only (now lives in ../backend)
+_old-api/

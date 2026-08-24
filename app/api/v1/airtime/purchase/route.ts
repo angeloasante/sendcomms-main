@@ -1,34 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
+/**
+ * Proxied to the FastAPI backend (see lib/backend-proxy.ts).
+ * Original in-process implementation: _old-api/ (reference only, not built).
+ */
+import { proxyHandlers } from '@/lib/backend-proxy';
 
-export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json();
-    const { phoneNumber, amount, operatorId, countryCode } = body;
-
-    if (!phoneNumber || !amount || !operatorId) {
-      return NextResponse.json(
-        { error: 'Missing required fields: phoneNumber, amount, operatorId' },
-        { status: 400 }
-      );
-    }
-
-    // TODO: Implement airtime purchase logic with Reloadly
-    
-    return NextResponse.json({
-      success: true,
-      message: 'Airtime purchase initiated',
-      data: {
-        phoneNumber,
-        amount,
-        operatorId,
-        countryCode,
-        status: 'pending'
-      }
-    });
-  } catch (error) {
-    return NextResponse.json(
-      { error: 'Failed to purchase airtime' },
-      { status: 500 }
-    );
-  }
-}
+export const dynamic = 'force-dynamic';
+export const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = proxyHandlers();

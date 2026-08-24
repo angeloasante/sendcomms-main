@@ -69,6 +69,44 @@ interface Domain {
   created_at: string;
 }
 
+interface Toast {
+  id: string;
+  type: 'success' | 'error';
+  message: string;
+  detail?: string;
+}
+
+interface DomainCheck {
+  name?: string;
+  available: boolean;
+  reason: 'taken_by_you' | 'taken' | 'in_use_upstream' | 'invalid' | null;
+  message: string;
+}
+
+interface MailboxResult {
+  email: string;
+  password: string;
+  smtp?: { host: string; port: number; security?: string; username?: string };
+  imap?: { host: string; port: number; security?: string; username?: string };
+}
+
+/** Split a comma-separated recipient list into unique, trimmed addresses. */
+function parseRecipients(raw: string): string[] {
+  const seen = new Set<string>();
+  return raw
+    .split(',')
+    .map((r) => r.trim())
+    .filter((r) => r.length > 0)
+    .filter((r) => {
+      const key = r.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export default function EmailsPage() {
   const [activeTab, setActiveTab] = useState<'analytics' | 'emails' | 'domain'>('analytics');
   const [emails, setEmails] = useState<EmailLog[]>([]);
@@ -79,14 +117,44 @@ export default function EmailsPage() {
   const [domains, setDomains] = useState<Domain[]>([]);
   const [domainsLoading, setDomainsLoading] = useState(false);
   const [selectedDomain, setSelectedDomain] = useState<Domain | null>(null);
-  const [showAddDomain, setShowAddDomain] = useState(false);
-  const [newDomainName, setNewDomainName] = useState('');
-  const [newDomainRegion, setNewDomainRegion] = useState('us-east-1');
   const [addingDomain, setAddingDomain] = useState(false);
   const [domainError, setDomainError] = useState<string | null>(null);
   const [verifyingDomain, setVerifyingDomain] = useState<string | null>(null);
   const [syncingDomains, setSyncingDomains] = useState(false);
-  
+
+  // Toasts
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const pushToast = useCallback((type: Toast['type'], message: string, detail?: string) => {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    setToasts((t) => [...t, { id, type, message, detail }]);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 6000);
+  }, []);
+  const dismissToast = (id: string) => setToasts((t) => t.filter((x) => x.id !== id));
+
+  // Create New Mail (domain -> mailbox)
+  const [showCreateMail, setShowCreateMail] = useState(false);
+  const [mailStep, setMailStep] = useState<'domain' | 'newDomain' | 'mailbox'>('domain');
+  const [mailDomain, setMailDomain] = useState<Domain | null>(null);
+  const [nmName, setNmName] = useState('');
+  const [nmMode, setNmMode] = useState<'send_only' | 'full'>('send_only');
+  const [nmConfirmFull, setNmConfirmFull] = useState(false);
+  const [nmCreating, setNmCreating] = useState(false);
+  const [nmCheck, setNmCheck] = useState<DomainCheck | null>(null);
+  const [nmChecking, setNmChecking] = useState(false);
+  const [nmRecords, setNmRecords] = useState<DnsRecord[] | null>(null);
+  const [mbUser, setMbUser] = useState('');
+  const [mbPassword, setMbPassword] = useState('');
+  const [mbCreating, setMbCreating] = useState(false);
+  const [mbResult, setMbResult] = useState<MailboxResult | null>(null);
+
+  // Test Mail composer
+  const [showTestMail, setShowTestMail] = useState(false);
+  const [tmFrom, setTmFrom] = useState('');
+  const [tmTo, setTmTo] = useState('');
+  const [tmSubject, setTmSubject] = useState('');
+  const [tmMessage, setTmMessage] = useState('');
+  const [tmSending, setTmSending] = useState(false);
+
   const supabase = createClient();
 
   const fetchData = useCallback(async () => {
@@ -127,42 +195,134 @@ export default function EmailsPage() {
     }
   }, []);
 
-  // Add domain
-  const handleAddDomain = async () => {
-    if (!newDomainName.trim()) return;
-    
-    setAddingDomain(true);
-    setDomainError(null);
-    
+  // Ask the API whether the typed domain can be claimed (debounced).
+  useEffect(() => {
+    const name = nmName.trim().toLowerCase();
+    if (!name || !name.includes('.')) { setNmCheck(null); return; }
+    let cancelled = false;
+    setNmChecking(true);
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/v1/domains/check?name=${encodeURIComponent(name)}`);
+        const data = await res.json();
+        if (!cancelled) setNmCheck((data?.data as DomainCheck) ?? null);
+      } catch {
+        if (!cancelled) setNmCheck(null);
+      } finally {
+        if (!cancelled) setNmChecking(false);
+      }
+    }, 450);
+    return () => { cancelled = true; clearTimeout(t); setNmChecking(false); };
+  }, [nmName]);
+
+  // --- Create New Mail: add a domain (send-only or full hosting) ---
+  const handleCreateDomainForMail = async () => {
+    const name = nmName.trim().toLowerCase();
+    if (!name) return;
+    if (nmMode === 'full' && !nmConfirmFull) return;
+
+    setNmCreating(true);
     try {
       const response = await fetch('/api/v1/domains', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: newDomainName.trim().toLowerCase(),
-          region: newDomainRegion,
-          openTracking: false,
-          clickTracking: false,
-        }),
+        body: JSON.stringify({ name, mode: nmMode }),
       });
-      
       const data = await response.json();
-      
       if (!response.ok) {
-        setDomainError(data.error || 'Failed to add domain');
+        pushToast('error', data?.error?.message || data?.error || 'Failed to add domain', data?.error?.code);
         return;
       }
-      
-      // Refresh domains list
       await fetchDomains();
-      setShowAddDomain(false);
-      setNewDomainName('');
-      setSelectedDomain(data.data);
-    } catch (error) {
-      console.error('Error adding domain:', error);
-      setDomainError('Failed to add domain. Please try again.');
+      setNmRecords((data.data?.dns_records as DnsRecord[]) || []);
+      pushToast('success', `${name} added. Add the DNS record below, then verify.`);
+    } catch {
+      pushToast('error', 'Could not reach the server. Check your connection and try again.');
     } finally {
-      setAddingDomain(false);
+      setNmCreating(false);
+    }
+  };
+
+  // --- Create New Mail: create the mailbox on a verified domain ---
+  const handleCreateMailbox = async () => {
+    if (!mailDomain || !mbUser.trim()) return;
+    setMbCreating(true);
+    try {
+      const body: Record<string, string> = { user: mbUser.trim().toLowerCase() };
+      if (mbPassword.trim()) body.password = mbPassword.trim();
+
+      const response = await fetch(`/api/v1/domains/${mailDomain.id}/mailboxes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        pushToast('error', data?.error?.message || data?.error || 'Failed to create mailbox', data?.error?.code);
+        return;
+      }
+      setMbResult(data.data as MailboxResult);
+      pushToast('success', `Mailbox ${data.data?.email} created.`);
+    } catch {
+      pushToast('error', 'Could not reach the server. Check your connection and try again.');
+    } finally {
+      setMbCreating(false);
+    }
+  };
+
+  // --- Test Mail: really sends through the API ---
+  const handleSendTestMail = async () => {
+    const recipients = parseRecipients(tmTo);
+    if (recipients.length === 0) {
+      pushToast('error', 'Add at least one recipient.');
+      return;
+    }
+    const invalid = recipients.filter((r) => !EMAIL_RE.test(r));
+    if (invalid.length > 0) {
+      pushToast('error', `Not a valid email address: ${invalid[0]}`);
+      return;
+    }
+    if (recipients.length > 50) {
+      pushToast('error', `Too many recipients (${recipients.length}). The limit is 50 per message.`);
+      return;
+    }
+    if (!tmSubject.trim()) {
+      pushToast('error', 'Add a subject.');
+      return;
+    }
+
+    setTmSending(true);
+    try {
+      const payload: Record<string, unknown> = {
+        to: recipients,
+        subject: tmSubject.trim(),
+        text: tmMessage,
+        html: `<p>${tmMessage.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/\n/g, '<br/>')}</p>`,
+      };
+      if (tmFrom.trim()) payload.from = tmFrom.trim();
+
+      const response = await fetch('/api/v1/email/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json();
+
+      if (!response.ok || data?.success === false) {
+        pushToast('error', data?.error?.message || 'Failed to send email', data?.error?.code);
+        return;
+      }
+
+      pushToast('success', `Sent to ${recipients.length} recipient${recipients.length === 1 ? '' : 's'}.`);
+      setShowTestMail(false);
+      setTmTo('');
+      setTmSubject('');
+      setTmMessage('');
+      fetchData();
+    } catch {
+      pushToast('error', 'Could not reach the server. Check your connection and try again.');
+    } finally {
+      setTmSending(false);
     }
   };
 
@@ -298,16 +458,28 @@ export default function EmailsPage() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <h1 className="text-2xl font-semibold text-foreground tracking-tight">Mail Overview</h1>
           <div className="flex items-center gap-3">
-            <button className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-muted-foreground bg-card hover:bg-accent border border-border rounded-lg transition-all">
+            <button
+              onClick={() => { setShowTestMail(true); if (domains.length === 0) fetchDomains(); }}
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-muted-foreground bg-card hover:bg-accent border border-border rounded-lg transition-all"
+            >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
               </svg>
-              Filter
-              <svg className="w-3.5 h-3.5 ml-1 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
+              Test Mail
             </button>
-            <button className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-500 border border-indigo-500 rounded-lg shadow-lg shadow-indigo-500/20 transition-all">
+            <button
+              onClick={() => {
+                setShowCreateMail(true);
+                setMailStep('domain');
+                setMailDomain(null);
+                setNmRecords(null);
+                setMbResult(null);
+                setMbUser('');
+                setMbPassword('');
+                fetchDomains();
+              }}
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-500 border border-indigo-500 rounded-lg shadow-lg shadow-indigo-500/20 transition-all"
+            >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
@@ -784,7 +956,15 @@ export default function EmailsPage() {
                   {syncingDomains ? 'Syncing...' : 'Sync'}
                 </button>
                 <button 
-                  onClick={() => setShowAddDomain(true)}
+                  onClick={() => {
+                    setShowCreateMail(true);
+                    setMailStep('newDomain');
+                    setMailDomain(null);
+                    setNmRecords(null);
+                    setNmName('');
+                    setNmMode('send_only');
+                    setNmConfirmFull(false);
+                  }}
                   className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg shadow-lg shadow-indigo-500/20 transition-all"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -809,72 +989,6 @@ export default function EmailsPage() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
-              </div>
-            )}
-
-            {/* Add Domain Modal */}
-            {showAddDomain && (
-              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                <div className="bg-card border border-border rounded-xl p-6 w-full max-w-md mx-4 shadow-2xl">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-foreground">Add New Domain</h3>
-                    <button onClick={() => setShowAddDomain(false)} className="text-muted-foreground hover:text-foreground">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
-                  
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-foreground mb-1.5">Domain Name</label>
-                      <input
-                        type="text"
-                        value={newDomainName}
-                        onChange={(e) => setNewDomainName(e.target.value)}
-                        placeholder="example.com"
-                        className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500"
-                      />
-                      <p className="text-xs text-muted-foreground mt-1">We recommend using a subdomain (e.g., mail.example.com)</p>
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-foreground mb-1.5">Region</label>
-                      <select
-                        value={newDomainRegion}
-                        onChange={(e) => setNewDomainRegion(e.target.value)}
-                        className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500"
-                      >
-                        <option value="us-east-1">US East (N. Virginia)</option>
-                        <option value="eu-west-1">EU West (Ireland)</option>
-                        <option value="sa-east-1">South America (São Paulo)</option>
-                        <option value="ap-northeast-1">Asia Pacific (Tokyo)</option>
-                      </select>
-                      <p className="text-xs text-muted-foreground mt-1">Select the region closest to your users</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center justify-end gap-3 mt-6">
-                    <button
-                      onClick={() => setShowAddDomain(false)}
-                      className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={handleAddDomain}
-                      disabled={addingDomain || !newDomainName.trim()}
-                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {addingDomain && (
-                        <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                        </svg>
-                      )}
-                      {addingDomain ? 'Adding...' : 'Add Domain'}
-                    </button>
-                  </div>
-                </div>
               </div>
             )}
 
@@ -959,7 +1073,15 @@ export default function EmailsPage() {
                     Add a custom domain to send emails with your own branding and improve deliverability.
                   </p>
                   <button 
-                    onClick={() => setShowAddDomain(true)}
+                    onClick={() => {
+                      setShowCreateMail(true);
+                      setMailStep('newDomain');
+                      setMailDomain(null);
+                      setNmRecords(null);
+                      setNmName('');
+                      setNmMode('send_only');
+                      setNmConfirmFull(false);
+                    }}
                     className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 rounded-lg transition-colors"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1163,6 +1285,402 @@ export default function EmailsPage() {
             </div>
           </div>
         )}
+
+        {/* ---------------- Create New Mail ---------------- */}
+        {showCreateMail && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-card border border-border rounded-xl p-6 w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-foreground">
+                  {mailStep === 'mailbox' ? 'Create Mailbox' : 'Create New Mail'}
+                </h3>
+                <button onClick={() => setShowCreateMail(false)} className="text-muted-foreground hover:text-foreground">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Step 1: pick a domain */}
+              {mailStep === 'domain' && (
+                <div className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    Mail addresses live on a domain. Pick a verified domain, or add a new one.
+                  </p>
+                  {domainsLoading && <div className="text-sm text-muted-foreground">Loading domains…</div>}
+                  {!domainsLoading && domains.length === 0 && (
+                    <div className="text-sm text-muted-foreground border border-border rounded-lg p-4">
+                      You have no domains yet. Add one to get started.
+                    </div>
+                  )}
+                  <div className="space-y-2">
+                    {domains.map((d) => (
+                      <button
+                        key={d.id}
+                        onClick={() => {
+                          setMailDomain(d);
+                          if (d.status === 'verified') { setMailStep('mailbox'); } else { setNmRecords(d.dns_records || []); }
+                        }}
+                        className="w-full flex items-center justify-between px-3 py-2.5 bg-background border border-border rounded-lg hover:border-indigo-500/50 transition-colors text-left"
+                      >
+                        <span className="text-sm text-foreground">{d.name}</span>
+                        <span className={`text-xs px-2 py-0.5 rounded border ${
+                          d.status === 'verified'
+                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                            : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                        }`}>
+                          {d.status === 'verified' ? 'Verified' : d.status.replace('_', ' ')}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+
+                  {mailDomain && mailDomain.status !== 'verified' && (
+                    <div className="border border-amber-500/25 bg-amber-500/5 rounded-lg p-4 space-y-3">
+                      <p className="text-sm text-amber-300 font-medium">{mailDomain.name} isn&apos;t verified yet</p>
+                      <p className="text-xs text-muted-foreground">
+                        Add the DNS record below at your DNS provider, then verify. You can&apos;t create mailboxes until it&apos;s verified.
+                      </p>
+                      {(nmRecords || []).map((r, i) => (
+                        <div key={i} className="bg-background border border-border rounded p-2 text-xs font-mono break-all">
+                          <div className="text-muted-foreground">{r.type} · {r.name}</div>
+                          <div className="text-foreground mt-1">{r.value}</div>
+                        </div>
+                      ))}
+                      <button
+                        onClick={async () => { await handleVerifyDomain(mailDomain.id); await fetchDomains(); }}
+                        disabled={verifyingDomain === mailDomain.id}
+                        className="px-3 py-1.5 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded transition-colors disabled:opacity-50"
+                      >
+                        {verifyingDomain === mailDomain.id ? 'Verifying…' : 'Verify now'}
+                      </button>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={() => { setMailStep('newDomain'); setNmRecords(null); setNmName(''); setNmMode('send_only'); setNmConfirmFull(false); }}
+                    className="w-full px-3 py-2 text-sm font-medium text-indigo-400 border border-dashed border-border rounded-lg hover:border-indigo-500/50 transition-colors"
+                  >
+                    + Add a new domain
+                  </button>
+                </div>
+              )}
+
+              {/* Step 1b: add a domain */}
+              {mailStep === 'newDomain' && (
+                <div className="space-y-4">
+                  {!nmRecords && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-foreground mb-1.5">Domain name</label>
+                        <input
+                          type="text"
+                          value={nmName}
+                          onChange={(e) => setNmName(e.target.value)}
+                          placeholder="example.com"
+                          className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                        />
+                        {nmChecking && <p className="text-xs text-muted-foreground mt-1.5">Checking availability…</p>}
+                        {!nmChecking && nmCheck && (
+                          <p className={`text-xs mt-1.5 ${nmCheck.available ? 'text-emerald-400' : 'text-red-400'}`}>
+                            {nmCheck.available ? '✓ Available' : nmCheck.message}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="block text-sm font-medium text-foreground">How should we set it up?</label>
+                        <button
+                          onClick={() => setNmMode('send_only')}
+                          className={`w-full text-left px-3 py-3 rounded-lg border transition-colors ${
+                            nmMode === 'send_only' ? 'border-indigo-500 bg-indigo-500/5' : 'border-border bg-background hover:border-indigo-500/40'
+                          }`}
+                        >
+                          <div className="text-sm font-medium text-foreground">Send only <span className="text-xs text-emerald-400 ml-1">Recommended</span></div>
+                          <div className="text-xs text-muted-foreground mt-1">
+                            You keep receiving mail wherever you do today. We add one DKIM record &mdash; your MX is untouched.
+                          </div>
+                        </button>
+                        <button
+                          onClick={() => setNmMode('full')}
+                          className={`w-full text-left px-3 py-3 rounded-lg border transition-colors ${
+                            nmMode === 'full' ? 'border-amber-500 bg-amber-500/5' : 'border-border bg-background hover:border-amber-500/40'
+                          }`}
+                        >
+                          <div className="text-sm font-medium text-foreground">Full mail hosting</div>
+                          <div className="text-xs text-muted-foreground mt-1">
+                            We host this domain&apos;s inbox too. <span className="text-amber-400">This moves your MX to us and mail stops going to your current provider.</span>
+                          </div>
+                        </button>
+                        {nmMode === 'full' && (
+                          <label className="flex items-start gap-2 text-xs text-amber-300 bg-amber-500/5 border border-amber-500/25 rounded-lg p-3">
+                            <input type="checkbox" checked={nmConfirmFull} onChange={(e) => setNmConfirmFull(e.target.checked)} className="mt-0.5" />
+                            <span>I understand this redirects all inbound mail for {nmName || 'this domain'} to SendComms.</span>
+                          </label>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-end gap-3 pt-2">
+                        <button onClick={() => setMailStep('domain')} className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground">Back</button>
+                        <button
+                          onClick={handleCreateDomainForMail}
+                          disabled={nmCreating || nmChecking || !nmName.trim() || nmCheck?.available === false || (nmMode === 'full' && !nmConfirmFull)}
+                          className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {nmCreating && (
+                            <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                          )}
+                          {nmCreating ? 'Adding…' : 'Add domain'}
+                        </button>
+                      </div>
+                    </>
+                  )}
+
+                  {nmRecords && (
+                    <div className="space-y-3">
+                      <p className="text-sm text-foreground font-medium">Add these DNS records</p>
+                      <p className="text-xs text-muted-foreground">
+                        {nmMode === 'send_only'
+                          ? 'Add this at your DNS provider. Do not change your MX records.'
+                          : 'Add these at your DNS provider. This replaces your existing MX records.'}
+                      </p>
+                      {nmRecords.map((r, i) => (
+                        <div key={i} className="bg-background border border-border rounded-lg p-3">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-semibold text-indigo-400">{r.record} · {r.type}</span>
+                            <button
+                              onClick={() => { navigator.clipboard.writeText(r.value); pushToast('success', 'Copied to clipboard'); }}
+                              className="text-xs text-muted-foreground hover:text-foreground"
+                            >
+                              Copy
+                            </button>
+                          </div>
+                          <div className="text-xs text-muted-foreground font-mono">Host: {r.name}</div>
+                          <div className="text-xs text-foreground font-mono break-all mt-1">{r.value}</div>
+                        </div>
+                      ))}
+                      <div className="flex items-center justify-end gap-3 pt-2">
+                        <button onClick={() => { setNmRecords(null); setMailStep('domain'); }} className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground">Done</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Step 2: create the mailbox */}
+              {mailStep === 'mailbox' && mailDomain && (
+                <div className="space-y-4">
+                  {!mbResult && (
+                    <>
+                      <p className="text-sm text-muted-foreground">
+                        Creating a mailbox on <span className="text-foreground font-medium">{mailDomain.name}</span>. This gives you an inbox
+                        (IMAP) and an SMTP credential. You don&apos;t need a mailbox just to send.
+                      </p>
+                      <div>
+                        <label className="block text-sm font-medium text-foreground mb-1.5">Mailbox name</label>
+                        <div className="flex items-center">
+                          <input
+                            type="text"
+                            value={mbUser}
+                            onChange={(e) => setMbUser(e.target.value)}
+                            placeholder="hello"
+                            className="flex-1 px-3 py-2 bg-background border border-border rounded-l-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                          />
+                          <span className="px-3 py-2 bg-secondary border border-l-0 border-border rounded-r-lg text-sm text-muted-foreground">
+                            @{mailDomain.name}
+                          </span>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-foreground mb-1.5">Password <span className="text-muted-foreground font-normal">(optional)</span></label>
+                        <input
+                          type="text"
+                          value={mbPassword}
+                          onChange={(e) => setMbPassword(e.target.value)}
+                          placeholder="Leave blank to generate a strong one"
+                          className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">Minimum 8 characters if you set your own.</p>
+                      </div>
+                      <div className="flex items-center justify-end gap-3 pt-2">
+                        <button onClick={() => setMailStep('domain')} className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground">Back</button>
+                        <button
+                          onClick={handleCreateMailbox}
+                          disabled={mbCreating || !mbUser.trim()}
+                          className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {mbCreating && (
+                            <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                          )}
+                          {mbCreating ? 'Creating…' : 'Create mailbox'}
+                        </button>
+                      </div>
+                    </>
+                  )}
+
+                  {mbResult && (
+                    <div className="space-y-3">
+                      <div className="border border-amber-500/25 bg-amber-500/5 rounded-lg p-3">
+                        <p className="text-sm text-amber-300 font-medium">Copy the password now</p>
+                        <p className="text-xs text-muted-foreground mt-1">It cannot be retrieved later.</p>
+                      </div>
+                      {([
+                        ['Email', mbResult.email],
+                        ['Password', mbResult.password],
+                        ['SMTP', mbResult.smtp ? `${mbResult.smtp.host}:${mbResult.smtp.port}` : '-'],
+                        ['IMAP', mbResult.imap ? `${mbResult.imap.host}:${mbResult.imap.port}` : '-'],
+                      ] as [string, string][]).map(([label, value]) => (
+                        <div key={label} className="flex items-center justify-between bg-background border border-border rounded-lg p-3">
+                          <div className="min-w-0">
+                            <div className="text-xs text-muted-foreground">{label}</div>
+                            <div className="text-sm text-foreground font-mono truncate">{value}</div>
+                          </div>
+                          <button
+                            onClick={() => { navigator.clipboard.writeText(value); pushToast('success', `${label} copied`); }}
+                            className="text-xs text-muted-foreground hover:text-foreground ml-3 flex-shrink-0"
+                          >
+                            Copy
+                          </button>
+                        </div>
+                      ))}
+                      <div className="flex items-center justify-end gap-3 pt-2">
+                        <button
+                          onClick={() => { setShowCreateMail(false); setMbResult(null); setMbUser(''); setMbPassword(''); }}
+                          className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-colors"
+                        >
+                          Done
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ---------------- Test Mail ---------------- */}
+        {showTestMail && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-card border border-border rounded-xl p-6 w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-foreground">Send a test email</h3>
+                <button onClick={() => setShowTestMail(false)} className="text-muted-foreground hover:text-foreground">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">From</label>
+                  <input
+                    type="text"
+                    list="sendcomms-from-options"
+                    value={tmFrom}
+                    onChange={(e) => setTmFrom(e.target.value)}
+                    placeholder="Leave blank to use your default sender"
+                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                  />
+                  <datalist id="sendcomms-from-options">
+                    {domains.filter((d) => d.status === 'verified').map((d) => (
+                      <option key={d.id} value={`noreply@${d.name}`} />
+                    ))}
+                  </datalist>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Must be an address on one of your verified domains.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">To</label>
+                  <input
+                    type="text"
+                    value={tmTo}
+                    onChange={(e) => setTmTo(e.target.value)}
+                    placeholder="someone@example.com, another@example.com"
+                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Separate multiple recipients with commas.
+                    {parseRecipients(tmTo).length > 0 && (
+                      <span className={parseRecipients(tmTo).length > 50 ? 'text-red-400 ml-1' : 'text-indigo-400 ml-1'}>
+                        {parseRecipients(tmTo).length} recipient{parseRecipients(tmTo).length === 1 ? '' : 's'}
+                      </span>
+                    )}
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">Subject</label>
+                  <input
+                    type="text"
+                    value={tmSubject}
+                    onChange={(e) => setTmSubject(e.target.value)}
+                    placeholder="Test from SendComms"
+                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">Message</label>
+                  <textarea
+                    value={tmMessage}
+                    onChange={(e) => setTmMessage(e.target.value)}
+                    rows={5}
+                    placeholder="Write your message…"
+                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/50 resize-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 mt-6">
+                <button onClick={() => setShowTestMail(false)} className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground">Cancel</button>
+                <button
+                  onClick={handleSendTestMail}
+                  disabled={tmSending || !tmTo.trim() || !tmSubject.trim()}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {tmSending && (
+                    <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  )}
+                  {tmSending ? 'Sending…' : 'Send'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ---------------- Toasts ---------------- */}
+        <div className="fixed bottom-6 right-6 z-[60] flex flex-col gap-2 w-full max-w-sm pointer-events-none">
+          {toasts.map((t) => (
+            <div
+              key={t.id}
+              className={`pointer-events-auto flex items-start gap-3 px-4 py-3 rounded-lg border shadow-lg ${
+                t.type === 'error'
+                  ? 'bg-red-950/90 border-red-500/30 text-red-200'
+                  : 'bg-emerald-950/90 border-emerald-500/30 text-emerald-200'
+              }`}
+            >
+              <div className="flex-1 min-w-0">
+                <div className="text-sm">{t.message}</div>
+                {t.detail && <div className="text-xs opacity-70 mt-0.5 font-mono">{t.detail}</div>}
+              </div>
+              <button onClick={() => dismissToast(t.id)} className="opacity-60 hover:opacity-100 flex-shrink-0">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          ))}
+        </div>
 
       </div>
     </div>

@@ -3,6 +3,52 @@
 import { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 
+interface SenderId {
+  id: string;
+  sender_id: string;
+  status: 'pending' | 'approved' | 'rejected';
+  purpose: string;
+  provider: string;
+  destination_code: string;
+  destination_label: string;
+  created_at: string;
+  approved_at: string | null;
+}
+
+/** Where a sender ID will be used. This decides which carrier we register it with. */
+const SENDER_DESTINATIONS = [
+  { code: '233', label: 'Ghana' },
+  { code: '234', label: 'Nigeria' },
+  { code: '254', label: 'Kenya' },
+  { code: '27', label: 'South Africa' },
+  { code: '256', label: 'Uganda' },
+  { code: '255', label: 'Tanzania' },
+  { code: 'international', label: 'Anywhere else' },
+];
+
+interface Toast {
+  id: string;
+  type: 'success' | 'error';
+  message: string;
+  detail?: string;
+}
+
+/** Split a comma-separated recipient list into unique, trimmed numbers. */
+function parseNumbers(raw: string): string[] {
+  const seen = new Set<string>();
+  return raw
+    .split(',')
+    .map((n) => n.replace(/[\s-]/g, '').trim())
+    .filter((n) => n.length > 0)
+    .filter((n) => {
+      if (seen.has(n)) return false;
+      seen.add(n);
+      return true;
+    });
+}
+
+const E164 = /^\+?[1-9]\d{6,14}$/;
+
 interface SMSLog {
   id: string;
   transaction_id: string;
@@ -44,11 +90,163 @@ interface SMSStats {
 }
 
 export default function SMSPage() {
-  const [activeTab, setActiveTab] = useState<'analytics' | 'messages'>('analytics');
+  const [activeTab, setActiveTab] = useState<'analytics' | 'messages' | 'senders'>('analytics');
   const [messages, setMessages] = useState<SMSLog[]>([]);
   const [stats, setStats] = useState<SMSStats | null>(null);
   const [loading, setLoading] = useState(true);
+  // Toasts
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const pushToast = useCallback((type: Toast['type'], message: string, detail?: string) => {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    setToasts((t) => [...t, { id, type, message, detail }]);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 6000);
+  }, []);
+  const dismissToast = (id: string) => setToasts((t) => t.filter((x) => x.id !== id));
+
+  // Sender IDs
+  const [senders, setSenders] = useState<SenderId[]>([]);
+  const [sendersLoading, setSendersLoading] = useState(false);
+  const [showAddSender, setShowAddSender] = useState(false);
+  const [newSenderId, setNewSenderId] = useState('');
+  const [newSenderPurpose, setNewSenderPurpose] = useState('');
+  const [newSenderDest, setNewSenderDest] = useState('233');
+  const [addingSender, setAddingSender] = useState(false);
+  const [refreshingSender, setRefreshingSender] = useState<string | null>(null);
+
+  // Send SMS composer
+  const [showSend, setShowSend] = useState(false);
+  const [smTo, setSmTo] = useState('');
+  const [smFrom, setSmFrom] = useState('');
+  const [smMessage, setSmMessage] = useState('');
+  const [smSending, setSmSending] = useState(false);
+
   const supabase = createClient();
+
+  const fetchSenders = useCallback(async () => {
+    setSendersLoading(true);
+    try {
+      const res = await fetch('/api/v1/sms/sender-ids');
+      const data = await res.json();
+      if (res.ok) setSenders(data.data || []);
+    } catch {
+      /* surfaced on the next action */
+    } finally {
+      setSendersLoading(false);
+    }
+  }, []);
+
+  const handleAddSender = async () => {
+    if (!newSenderId.trim() || !newSenderPurpose.trim()) return;
+    setAddingSender(true);
+    try {
+      const res = await fetch('/api/v1/sms/sender-ids', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sender_id: newSenderId.trim(),
+          purpose: newSenderPurpose.trim(),
+          destination: newSenderDest,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        pushToast('error', data?.error?.message || data?.error || 'Could not register sender ID');
+        return;
+      }
+      pushToast(data.submitted_to_carrier ? 'success' : 'error', data.message || 'Sender ID submitted.');
+      setShowAddSender(false);
+      setNewSenderId('');
+      setNewSenderPurpose('');
+      fetchSenders();
+    } catch {
+      pushToast('error', 'Could not reach the server. Check your connection and try again.');
+    } finally {
+      setAddingSender(false);
+    }
+  };
+
+  const handleRefreshSender = async (id: string) => {
+    setRefreshingSender(id);
+    try {
+      const res = await fetch(`/api/v1/sms/sender-ids/${id}/refresh`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) {
+        pushToast('error', data?.error?.message || data?.error || 'Could not check status');
+        return;
+      }
+      if (data.warning) pushToast('error', data.warning);
+      else pushToast('success', data.message || 'Status updated.');
+      fetchSenders();
+    } catch {
+      pushToast('error', 'Could not reach the server.');
+    } finally {
+      setRefreshingSender(null);
+    }
+  };
+
+  const handleDeleteSender = async (id: string, name: string) => {
+    if (!confirm(`Remove sender ID "${name}"? You will no longer be able to send from it.`)) return;
+    try {
+      const res = await fetch(`/api/v1/sms/sender-ids/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) {
+        pushToast('error', data?.error?.message || data?.error || 'Could not remove sender ID');
+        return;
+      }
+      pushToast('success', data.message || 'Sender ID removed.');
+      fetchSenders();
+    } catch {
+      pushToast('error', 'Could not reach the server.');
+    }
+  };
+
+  // Sends for real, one request per recipient (the API sends to one number at a time).
+  const handleSendSms = async () => {
+    const numbers = parseNumbers(smTo);
+    if (numbers.length === 0) { pushToast('error', 'Add at least one phone number.'); return; }
+    const bad = numbers.find((n) => !E164.test(n));
+    if (bad) { pushToast('error', `Not a valid number: ${bad}. Use E.164, e.g. +233540800994.`); return; }
+    if (!smMessage.trim()) { pushToast('error', 'Write a message.'); return; }
+
+    setSmSending(true);
+    try {
+      const results = await Promise.all(numbers.map(async (to) => {
+        try {
+          const body: Record<string, unknown> = { to, message: smMessage };
+          if (smFrom.trim()) body.from = smFrom.trim();
+          const res = await fetch('/api/v1/sms/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          });
+          const data = await res.json();
+          return { to, ok: res.ok && data?.success !== false, error: data?.error };
+        } catch {
+          return { to, ok: false, error: { message: 'Network error' } };
+        }
+      }));
+
+      const sent = results.filter((r) => r.ok);
+      const failed = results.filter((r) => !r.ok);
+
+      if (sent.length > 0) {
+        pushToast('success', `Sent to ${sent.length} of ${numbers.length} number${numbers.length === 1 ? '' : 's'}.`);
+      }
+      for (const f of failed.slice(0, 3)) {
+        pushToast('error', `${f.to}: ${f.error?.message || 'Failed to send'}`, f.error?.code);
+      }
+      if (failed.length > 3) pushToast('error', `…and ${failed.length - 3} more failed.`);
+
+      if (failed.length === 0) {
+        setShowSend(false);
+        setSmTo('');
+        setSmMessage('');
+      }
+      fetchData();
+    } finally {
+      setSmSending(false);
+    }
+  };
 
   const fetchData = useCallback(async () => {
     try {
@@ -75,6 +273,10 @@ export default function SMSPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    if (activeTab === 'senders') fetchSenders();
+  }, [activeTab, fetchSenders]);
 
   const getStatusBadge = (status: string) => {
     const statusConfig: Record<string, { bg: string; text: string; label: string }> = {
@@ -149,7 +351,10 @@ export default function SMSPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
             </button>
-            <button className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-purple-600 hover:bg-purple-500 border border-purple-500 rounded-lg shadow-lg shadow-purple-500/20 transition-all">
+            <button
+              onClick={() => setShowSend(true)}
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-purple-600 hover:bg-purple-500 border border-purple-500 rounded-lg shadow-lg shadow-purple-500/20 transition-all"
+            >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
@@ -186,6 +391,19 @@ export default function SMSPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
               </svg>
               Messages
+            </button>
+            <button 
+              onClick={() => setActiveTab('senders')}
+              className={`relative py-3 text-sm font-medium transition-colors border-b-2 focus:outline-none flex items-center gap-2 ${
+                activeTab === 'senders' 
+                  ? 'text-foreground border-purple-500' 
+                  : 'text-muted-foreground hover:text-foreground border-transparent'
+              }`}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
+              </svg>
+              Sender IDs
             </button>
           </nav>
         </div>
@@ -590,6 +808,302 @@ export default function SMSPage() {
             </div>
           </div>
         )}
+
+        {/* TAB: Sender IDs */}
+        {activeTab === 'senders' && (
+          <div className="space-y-6 animate-in fade-in duration-300">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold text-foreground">Sender IDs</h2>
+                <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
+                  The name recipients see instead of a phone number. Carriers review each one manually,
+                  which can take a few weeks &mdash; you can keep sending from your default sender in the meantime.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowAddSender(true)}
+                className="flex-shrink-0 flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-purple-600 hover:bg-purple-500 border border-purple-500 rounded-lg transition-all"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Register Sender ID
+              </button>
+            </div>
+
+            {sendersLoading && <div className="text-sm text-muted-foreground">Loading sender IDs…</div>}
+
+            {!sendersLoading && senders.length === 0 && (
+              <div className="bg-card border border-border rounded-xl p-10 text-center">
+                <div className="text-sm font-medium text-foreground mb-1">No sender IDs yet</div>
+                <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                  Register one to have your brand name appear as the sender. Ghanaian carriers block
+                  unregistered names, so registering is required before you can use one there.
+                </p>
+              </div>
+            )}
+
+            {!sendersLoading && senders.length > 0 && (
+              <div className="bg-card border border-border rounded-xl overflow-hidden">
+                <table className="w-full text-left">
+                  <thead className="bg-secondary/50 border-b border-border">
+                    <tr>
+                      <th className="py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Sender ID</th>
+                      <th className="py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Usable for</th>
+                      <th className="py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Status</th>
+                      <th className="py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Purpose</th>
+                      <th className="py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {senders.map((sid) => (
+                      <tr key={sid.id}>
+                        <td className="py-3 px-4 text-sm font-medium text-foreground">{sid.sender_id}</td>
+                        <td className="py-3 px-4 text-sm text-muted-foreground">{sid.destination_label || '—'}</td>
+                        <td className="py-3 px-4">
+                          <span className={`text-xs px-2 py-0.5 rounded border ${
+                            sid.status === 'approved'
+                              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                              : sid.status === 'rejected'
+                                ? 'bg-red-500/10 text-red-400 border-red-500/20'
+                                : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                          }`}>
+                            {sid.status === 'approved' ? 'Approved' : sid.status === 'rejected' ? 'Rejected' : 'Pending review'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-sm text-muted-foreground max-w-xs truncate">{sid.purpose}</td>
+                        <td className="py-3 px-4 text-right whitespace-nowrap">
+                          {sid.status !== 'approved' && (
+                            <button
+                              onClick={() => handleRefreshSender(sid.id)}
+                              disabled={refreshingSender === sid.id}
+                              className="text-xs font-medium text-muted-foreground hover:text-foreground px-2 py-1 rounded border border-border mr-2 disabled:opacity-50"
+                            >
+                              {refreshingSender === sid.id ? 'Checking…' : 'Check status'}
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleDeleteSender(sid.id, sid.sender_id)}
+                            className="text-xs font-medium text-red-400 hover:text-red-300 px-2 py-1 rounded border border-red-500/20"
+                          >
+                            Remove
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <div className="bg-card border border-border rounded-xl p-4">
+              <p className="text-xs text-muted-foreground">
+                <span className="text-foreground font-medium">Ghana:</span> promotional SMS may not be sent on Sundays,
+                and political, religious, gambling or unsolicited promotional content is not permitted.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* ---------------- Register Sender ID ---------------- */}
+        {showAddSender && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-card border border-border rounded-xl p-6 w-full max-w-lg shadow-2xl">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-foreground">Register Sender ID</h3>
+                <button onClick={() => setShowAddSender(false)} className="text-muted-foreground hover:text-foreground">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">Sender ID</label>
+                  <input
+                    type="text"
+                    value={newSenderId}
+                    maxLength={11}
+                    onChange={(e) => setNewSenderId(e.target.value)}
+                    placeholder="AcmeCorp"
+                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {newSenderId.length}/11 characters. Letters, numbers, spaces, dots and dashes.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">Where will you send to?</label>
+                  <select
+                    value={newSenderDest}
+                    onChange={(e) => setNewSenderDest(e.target.value)}
+                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+                  >
+                    {SENDER_DESTINATIONS.map((d) => (
+                      <option key={d.code} value={d.code}>{d.label}</option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Each carrier keeps its own approved list, so this decides who we register the name with.
+                    Register it again for another destination if you need it in more than one market.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">Purpose</label>
+                  <textarea
+                    value={newSenderPurpose}
+                    onChange={(e) => setNewSenderPurpose(e.target.value)}
+                    rows={3}
+                    placeholder="Order notifications for our online store"
+                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-purple-500/50 resize-none"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Carriers require a reason. Be specific &mdash; vague purposes are commonly rejected.
+                  </p>
+                </div>
+
+                <div className="rounded-lg border border-amber-500/25 bg-amber-500/5 p-3">
+                  <p className="text-xs text-amber-300">
+                    Approval is done by the mobile carriers and typically takes a few weeks. Your messages
+                    keep sending from the default sender until it is approved.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 mt-6">
+                <button onClick={() => setShowAddSender(false)} className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground">Cancel</button>
+                <button
+                  onClick={handleAddSender}
+                  disabled={addingSender || newSenderId.trim().length < 3 || !newSenderPurpose.trim()}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-purple-600 hover:bg-purple-500 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {addingSender && (
+                    <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  )}
+                  {addingSender ? 'Submitting…' : 'Submit for approval'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ---------------- Send SMS ---------------- */}
+        {showSend && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-card border border-border rounded-xl p-6 w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-foreground">Send SMS</h3>
+                <button onClick={() => setShowSend(false)} className="text-muted-foreground hover:text-foreground">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">To</label>
+                  <input
+                    type="text"
+                    value={smTo}
+                    onChange={(e) => setSmTo(e.target.value)}
+                    placeholder="+233540800994, +447555834656"
+                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    E.164 format. Separate multiple numbers with commas.
+                    {parseNumbers(smTo).length > 0 && (
+                      <span className="text-purple-400 ml-1">
+                        {parseNumbers(smTo).length} recipient{parseNumbers(smTo).length === 1 ? '' : 's'}
+                      </span>
+                    )}
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">
+                    From <span className="text-muted-foreground font-normal">(optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={smFrom}
+                    onChange={(e) => setSmFrom(e.target.value)}
+                    placeholder="Leave blank to use your default sender"
+                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">A verified number or sender ID. Not supported in every country.</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">Message</label>
+                  <textarea
+                    value={smMessage}
+                    onChange={(e) => setSmMessage(e.target.value)}
+                    rows={5}
+                    maxLength={1600}
+                    placeholder="Write your message…"
+                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-purple-500/50 resize-none"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {smMessage.length}/1600 characters ·{' '}
+                    {(() => {
+                      const unicode = /[^\x00-\x7F]/.test(smMessage);
+                      const per = unicode ? 70 : 160;
+                      const segs = Math.max(1, Math.ceil(smMessage.length / per));
+                      return `${segs} segment${segs === 1 ? '' : 's'}${unicode ? ' (unicode, 70 chars each)' : ''}`;
+                    })()}
+                    {parseNumbers(smTo).length > 1 && ' · billed per recipient'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 mt-6">
+                <button onClick={() => setShowSend(false)} className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground">Cancel</button>
+                <button
+                  onClick={handleSendSms}
+                  disabled={smSending || !smTo.trim() || !smMessage.trim()}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-purple-600 hover:bg-purple-500 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {smSending && (
+                    <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  )}
+                  {smSending ? 'Sending…' : 'Send'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ---------------- Toasts ---------------- */}
+        <div className="fixed bottom-6 right-6 z-[60] flex flex-col gap-2 w-full max-w-sm pointer-events-none">
+          {toasts.map((t) => (
+            <div
+              key={t.id}
+              className={`pointer-events-auto flex items-start gap-3 px-4 py-3 rounded-lg border shadow-lg ${
+                t.type === 'error'
+                  ? 'bg-red-950/90 border-red-500/30 text-red-200'
+                  : 'bg-emerald-950/90 border-emerald-500/30 text-emerald-200'
+              }`}
+            >
+              <div className="flex-1 min-w-0">
+                <div className="text-sm">{t.message}</div>
+                {t.detail && <div className="text-xs opacity-70 mt-0.5 font-mono">{t.detail}</div>}
+              </div>
+              <button onClick={() => dismissToast(t.id)} className="opacity-60 hover:opacity-100 flex-shrink-0">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          ))}
+        </div>
 
       </div>
     </div>

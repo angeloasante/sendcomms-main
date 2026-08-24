@@ -272,10 +272,13 @@ SendComms includes a security test suite (`/api/test-security`) that verifies:
 | **Sandbox Isolation** | Test keys isolated from live environment |
 | **API Key Scoping** | Keys restricted to their customer's data |
 
-Run security tests:
+Run security tests (internal only — requires `CRON_SECRET`, disabled in production unless `ALLOW_TEST_ENDPOINTS=true`):
 ```bash
-curl -X POST "https://api.sendcomms.com/api/test-security?test=all" | jq .
+curl -X POST "http://localhost:3000/api/test-security?test=all" \
+  -H "Authorization: Bearer $CRON_SECRET" | jq .
 ```
+
+API keys are stored as SHA-256 hashes; the raw key is shown once at creation and cannot be recovered.
 
 ---
 
